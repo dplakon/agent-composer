@@ -297,11 +297,12 @@ export class MidiScheduler extends EventEmitter {
    * Start Link update loop
    */
   startLinkUpdate() {
-    this.updateTimer = setInterval(() => {
-      if (this.link) {
-        this.currentBeat = this.link.beat || 0;
-      }
-    }, 16); // ~60fps
+    // Start link update if not already running
+    if (!this.link._updateTimer) {
+      this.link.startUpdate(60, () => {
+        // This keeps link updating
+      });
+    }
   }
 
   /**
@@ -316,51 +317,68 @@ export class MidiScheduler extends EventEmitter {
     const bpm = this.link.bpm || 120;
     const msPerBeat = 60000 / bpm;
     
-    // Handle looping
-    let effectiveBeat = currentBeat;
-    if (this.loopLength > 0) {
-      effectiveBeat = this.loopStart + ((currentBeat - this.loopStart) % this.loopLength);
-    }
-    
     // Process events that should be scheduled
     this.events.forEach(event => {
-      if (event.executed && !this.loopLength) return; // Skip executed events unless looping
+      // Skip already executed events unless we're looping
+      if (event.executed && this.loopLength === 0) return;
       
+      // Get the absolute beat position of the event
       const eventBeat = event.getAbsoluteBeat(this.link.quantum);
+      
+      // Calculate the target beat for this event
       let targetBeat = eventBeat;
       
       // Handle looping
       if (this.loopLength > 0) {
-        // Reset executed flag if we've looped back
-        if (effectiveBeat < this.lastScheduledBeat) {
-          event.executed = false;
+        // Check if we need to reset the executed flag
+        const loopPosition = currentBeat % this.loopLength;
+        const lastLoopPosition = this.lastScheduledBeat % this.loopLength;
+        
+        // Reset all events when we loop back
+        if (loopPosition < lastLoopPosition) {
+          this.events.forEach(e => e.executed = false);
         }
         
-        // Calculate position within loop
-        if (eventBeat >= this.loopStart && eventBeat < this.loopStart + this.loopLength) {
-          targetBeat = this.loopStart + ((effectiveBeat - this.loopStart + (eventBeat - this.loopStart)) % this.loopLength);
+        // Calculate when this event should next occur
+        const eventPositionInLoop = eventBeat % this.loopLength;
+        const currentPositionInLoop = currentBeat % this.loopLength;
+        
+        // Find the next occurrence of this event
+        if (eventPositionInLoop >= currentPositionInLoop) {
+          targetBeat = currentBeat + (eventPositionInLoop - currentPositionInLoop);
+        } else {
+          targetBeat = currentBeat + (this.loopLength - currentPositionInLoop + eventPositionInLoop);
         }
+      } else {
+        // Non-looping: event plays at its absolute position
+        targetBeat = eventBeat;
       }
       
-      // Calculate when this event should fire
+      // Calculate timing
       const beatsUntilEvent = targetBeat - currentBeat;
-      const msUntilEvent = beatsUntilEvent * msPerBeat;
-      const eventTime = now + msUntilEvent + this.latencyCompensation;
       
-      // Schedule if within lookahead window and not yet executed
-      if (eventTime <= lookAheadEnd && eventTime > now && !event.executed) {
-        const delay = Math.max(0, eventTime - now);
+      // Only schedule if the event is coming up soon and hasn't been executed
+      if (beatsUntilEvent >= 0 && beatsUntilEvent * msPerBeat <= this.lookaheadTime && !event.executed) {
+        const msUntilEvent = beatsUntilEvent * msPerBeat;
+        const delay = Math.max(0, msUntilEvent + this.latencyCompensation);
         
         setTimeout(() => {
           this.executeEvent(event);
+          
+          // In loop mode, reset executed flag after execution
+          if (this.loopLength > 0) {
+            setTimeout(() => {
+              event.executed = false;
+            }, 100);
+          }
         }, delay);
         
         event.executed = true;
-        event.scheduledTime = eventTime;
+        event.scheduledTime = now + delay;
       }
     });
     
-    this.lastScheduledBeat = effectiveBeat;
+    this.lastScheduledBeat = currentBeat;
   }
 
   /**
