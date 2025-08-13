@@ -1,0 +1,53 @@
+{
+  "name": "ableton-link-cli",
+  "version": "1.0.0",
+  "description": "A CLI tool for monitoring Ableton Link beat information in your terminal",
+  "type": "module",
+  "main": "src/cli.jsx",
+  "bin": {
+    "ableton-link-cli": "./src/cli.jsx",
+    "link-cli": "./src/cli.jsx"
+  },
+  "scripts": {
+    "start": "node --loader @esbuild-kit/esm-loader src/cli.jsx",
+    "dev": "node --loader @esbuild-kit/esm-loader --watch src/cli.jsx",
+    "demo": "node demo.js",
+    "test-link": "node test.js",
+    "test-cli": "node test-cli.js",
+    "test-midi": "node test-midi.js",
+    "test-latency": "node test-latency.js",
+    "midi": "node --loader @esbuild-kit/esm-loader src/cli.jsx --midi",
+    "test": "node test-cli.js"
+  },
+  "keywords": [
+    "ableton",
+    "link",
+    "beat",
+    "sync",
+    "cli",
+    "terminal",
+    "music",
+    "bpm"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "dependencies": {
+    "abletonlink": "^0.2.0-beta.0",
+    "chalk": "^5.5.0",
+    "easymidi": "^3.1.0",
+    "ink": "^6.1.1",
+    "ink-big-text": "^2.0.0",
+    "ink-gradient": "^3.0.0",
+    "meow": "^13.2.0",
+    "react": "^19.1.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.28.0",
+    "@babel/preset-react": "^7.27.1",
+    "@esbuild-kit/esm-loader": "^2.6.5",
+    "babel-loader": "^10.0.0"
+  }
+}
