@@ -4,9 +4,12 @@ import React from 'react';
 import { render } from 'ink';
 import meow from 'meow';
 import AbletonLink from 'abletonlink';
+import fs from 'fs';
+import path from 'path';
 import LinkDisplay from './components/LinkDisplay.jsx';
 import LinkDisplayWithControls from './components/LinkDisplayWithControls.jsx';
 import LinkDisplayWithMidi from './components/LinkDisplayWithMidi.jsx';
+import MidiScheduler from './components/MidiScheduler.jsx';
 
 const cli = meow(`
   Usage
@@ -17,6 +20,8 @@ const cli = meow(`
     --quantum, -q  Quantum/Bar length (default: 4)
     --controls, -c Enable keyboard controls (default: true)
     --midi, -m     Enable MIDI output (default: false)
+    --scheduler, -s Enable MIDI scheduler mode (default: false)
+    --pattern, -p  Load pattern file for scheduler
     --latency, -l  MIDI latency compensation in ms (default: 0)
     --help, -h     Show help
     --version, -v  Show version
@@ -26,6 +31,8 @@ const cli = meow(`
     $ ableton-link-cli --bpm 128 --quantum 8
     $ ableton-link-cli -b 140 -q 4
     $ ableton-link-cli --midi  # Enable MIDI output
+    $ ableton-link-cli --scheduler  # Run MIDI scheduler
+    $ ableton-link-cli -s -p patterns/example.json  # Load pattern
 
   Info
     This CLI tool connects to Ableton Link and displays
@@ -58,6 +65,15 @@ const cli = meow(`
       shortFlag: 'm',
       default: false
     },
+    scheduler: {
+      type: 'boolean',
+      shortFlag: 's',
+      default: false
+    },
+    pattern: {
+      type: 'string',
+      shortFlag: 'p'
+    },
     latency: {
       type: 'number',
       shortFlag: 'l',
@@ -88,7 +104,19 @@ link.enablePlayStateSync();
 let Component;
 let componentProps = { link };
 
-if (cli.flags.midi) {
+if (cli.flags.scheduler) {
+  Component = MidiScheduler;
+  if (cli.flags.pattern) {
+    // Load pattern file if provided
+    try {
+      const patternPath = path.resolve(cli.flags.pattern);
+      const patternData = JSON.parse(fs.readFileSync(patternPath, 'utf8'));
+      componentProps.initialPattern = patternData;
+    } catch (error) {
+      console.error(`Failed to load pattern file: ${error.message}`);
+    }
+  }
+} else if (cli.flags.midi) {
   Component = LinkDisplayWithMidi;
   componentProps.initialLatency = cli.flags.latency;
 } else if (cli.flags.controls) {

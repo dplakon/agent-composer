@@ -16,7 +16,10 @@
     "test-cli": "node test-cli.js",
     "test-midi": "node test-midi.js",
     "test-latency": "node test-latency.js",
+    "test-scheduler": "node tests/test-scheduler.js",
     "midi": "node --loader @esbuild-kit/esm-loader src/cli.jsx --midi",
+    "scheduler": "node --loader @esbuild-kit/esm-loader src/cli.jsx --scheduler",
+    "scheduler-pattern": "node --loader @esbuild-kit/esm-loader src/cli.jsx --scheduler --pattern patterns/example-pattern.json",
     "test": "node test-cli.js"
   },
   "keywords": [

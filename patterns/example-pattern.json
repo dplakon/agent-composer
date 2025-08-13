@@ -1,0 +1,81 @@
+{
+  "name": "Example Pattern",
+  "tempo": 120,
+  "quantum": 4,
+  "loop": {
+    "length": 16,
+    "start": 0
+  },
+  "patterns": [
+    {
+      "name": "Melody",
+      "startBar": 0,
+      "pattern": [
+        { "note": 60, "duration": 0.5, "velocity": 100 },
+        { "note": 64, "duration": 0.5, "velocity": 90 },
+        { "note": 67, "duration": 0.5, "velocity": 95 },
+        { "note": 72, "duration": 0.5, "velocity": 100 },
+        { "note": 67, "duration": 0.5, "velocity": 90 },
+        { "note": 64, "duration": 0.5, "velocity": 85 },
+        { "note": 60, "duration": 1, "velocity": 100 }
+      ]
+    },
+    {
+      "name": "Bass",
+      "startBar": 0,
+      "pattern": [
+        { "note": 36, "duration": 1, "velocity": 110 },
+        { "note": 36, "duration": 0.5, "velocity": 90 },
+        { "note": 43, "duration": 0.5, "velocity": 100 },
+        { "note": 36, "duration": 1, "velocity": 110 },
+        { "note": 41, "duration": 1, "velocity": 100 }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "type": "noteOn",
+      "bar": 0,
+      "beat": 0,
+      "note": 60,
+      "velocity": 127,
+      "duration": 4,
+      "channel": 0
+    },
+    {
+      "type": "cc",
+      "bar": 0,
+      "beat": 0,
+      "controller": 7,
+      "value": 100,
+      "channel": 0
+    },
+    {
+      "type": "noteOn",
+      "bar": 1,
+      "beat": 0,
+      "note": 64,
+      "velocity": 100,
+      "duration": 4,
+      "channel": 0
+    },
+    {
+      "type": "noteOn",
+      "bar": 2,
+      "beat": 0,
+      "note": 67,
+      "velocity": 100,
+      "duration": 4,
+      "channel": 0
+    },
+    {
+      "type": "noteOn",
+      "bar": 3,
+      "beat": 0,
+      "note": 60,
+      "velocity": 127,
+      "duration": 4,
+      "channel": 0
+    }
+  ]
+}
