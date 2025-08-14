@@ -73,6 +73,7 @@ export class MidiScheduler extends EventEmitter {
     this.lookaheadTime = 100;  // ms to look ahead
     this.scheduleInterval = 25; // ms between schedule checks
     this.latencyCompensation = 0; // ms
+    this.playbackSpeed = 1.0; // Playback speed multiplier (1.0 = normal speed)
     
     // State
     this.isRunning = false;
@@ -319,7 +320,11 @@ export class MidiScheduler extends EventEmitter {
     const lookAheadEnd = now + this.lookaheadTime;
     const currentBeat = this.link.beat || 0;
     const bpm = this.link.bpm || 120;
-    const msPerBeat = 60000 / bpm;
+    // Apply playback speed to timing calculations
+    // When playbackSpeed < 1.0, notes play slower (longer msPerBeat)
+    // When playbackSpeed > 1.0, notes play faster (shorter msPerBeat)
+    const effectiveBpm = bpm * this.playbackSpeed;
+    const msPerBeat = 60000 / effectiveBpm;
     const quantum = this.link.quantum || 4;
     
     // Debug log once per 10 seconds if there are events
@@ -344,9 +349,14 @@ export class MidiScheduler extends EventEmitter {
       
       // Handle looping
       if (this.loopLength > 0) {
+        // Adjust loop position for playback speed
+        // When playing at different speeds, we need to scale the effective loop position
+        const scaledCurrentBeat = currentBeat * this.playbackSpeed;
+        const scaledLastBeat = this.lastScheduledBeat * this.playbackSpeed;
+        
         // Check if we need to reset the executed flag
-        const loopPosition = currentBeat % this.loopLength;
-        const lastLoopPosition = this.lastScheduledBeat % this.loopLength;
+        const loopPosition = scaledCurrentBeat % this.loopLength;
+        const lastLoopPosition = scaledLastBeat % this.loopLength;
         
         // Reset all events when we loop back
         if (loopPosition < lastLoopPosition) {
@@ -355,13 +365,13 @@ export class MidiScheduler extends EventEmitter {
         
         // Calculate when this event should next occur
         const eventPositionInLoop = eventBeat % this.loopLength;
-        const currentPositionInLoop = currentBeat % this.loopLength;
+        const currentPositionInLoop = scaledCurrentBeat % this.loopLength;
         
-        // Find the next occurrence of this event
+        // Find the next occurrence of this event  
         if (eventPositionInLoop >= currentPositionInLoop) {
-          targetBeat = currentBeat + (eventPositionInLoop - currentPositionInLoop);
+          targetBeat = currentBeat + (eventPositionInLoop - currentPositionInLoop) / this.playbackSpeed;
         } else {
-          targetBeat = currentBeat + (this.loopLength - currentPositionInLoop + eventPositionInLoop);
+          targetBeat = currentBeat + (this.loopLength - currentPositionInLoop + eventPositionInLoop) / this.playbackSpeed;
         }
       } else {
         // Non-looping: event plays at its absolute position
@@ -478,6 +488,30 @@ export class MidiScheduler extends EventEmitter {
   }
 
   /**
+   * Set playback speed
+   * @param {number} speed - Playback speed multiplier (0.1 to 4.0, where 1.0 is normal)
+   */
+  setPlaybackSpeed(speed) {
+    // Clamp speed to reasonable bounds
+    this.playbackSpeed = Math.max(0.1, Math.min(4.0, speed));
+    this.emit('playbackSpeedChanged', this.playbackSpeed);
+    
+    // Reset event execution flags when speed changes significantly
+    // This helps prevent timing issues when changing speed during playback
+    if (Math.abs(speed - this.playbackSpeed) > 0.2) {
+      this.events.forEach(e => e.executed = false);
+    }
+  }
+
+  /**
+   * Get current playback speed
+   * @returns {number} Current playback speed multiplier
+   */
+  getPlaybackSpeed() {
+    return this.playbackSpeed;
+  }
+
+  /**
    * Get scheduler statistics
    */
   getStats() {
@@ -488,7 +522,8 @@ export class MidiScheduler extends EventEmitter {
       pendingEvents: this.events.filter(e => !e.executed).length,
       isRunning: this.isRunning,
       loopEnabled: this.loopLength > 0,
-      currentBeat: this.currentBeat
+      currentBeat: this.currentBeat,
+      playbackSpeed: this.playbackSpeed
     };
   }
 

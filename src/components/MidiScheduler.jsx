@@ -17,7 +17,8 @@ const MidiSchedulerComponent = ({ link, initialPattern = null }) => {
     activeNotes: 0,
     pendingEvents: 0,
     loopEnabled: false,
-    currentBeat: 0
+    currentBeat: 0,
+    playbackSpeed: 1.0
   });
 
   const [beatInfo, setBeatInfo] = useState({
@@ -129,6 +130,45 @@ const MidiSchedulerComponent = ({ link, initialPattern = null }) => {
     // Export pattern
     if (input === 'e') {
       exportPattern();
+    }
+
+    // Playback speed controls
+    if (input === '-' || input === '_') {
+      if (scheduler.current) {
+        const currentSpeed = scheduler.current.getPlaybackSpeed();
+        const newSpeed = Math.max(0.1, currentSpeed - 0.1);
+        scheduler.current.setPlaybackSpeed(newSpeed);
+        updateSchedulerStatus();
+      }
+    }
+    if (input === '+' || input === '=') {
+      if (scheduler.current) {
+        const currentSpeed = scheduler.current.getPlaybackSpeed();
+        const newSpeed = Math.min(4.0, currentSpeed + 0.1);
+        scheduler.current.setPlaybackSpeed(newSpeed);
+        updateSchedulerStatus();
+      }
+    }
+    // Quick speed presets
+    if (input === '\\') {
+      if (scheduler.current) {
+        scheduler.current.setPlaybackSpeed(1.0); // Reset to normal
+        updateSchedulerStatus();
+      }
+    }
+    if (input === '/') {
+      if (scheduler.current) {
+        const currentSpeed = scheduler.current.getPlaybackSpeed();
+        scheduler.current.setPlaybackSpeed(currentSpeed === 0.5 ? 1.0 : 0.5); // Toggle half speed
+        updateSchedulerStatus();
+      }
+    }
+    if (input === '*') {
+      if (scheduler.current) {
+        const currentSpeed = scheduler.current.getPlaybackSpeed();
+        scheduler.current.setPlaybackSpeed(currentSpeed === 2.0 ? 1.0 : 2.0); // Toggle double speed
+        updateSchedulerStatus();
+      }
     }
   });
 
@@ -378,6 +418,19 @@ const MidiSchedulerComponent = ({ link, initialPattern = null }) => {
             <Text color="yellow">Quantum: </Text>
             <Text color="yellowBright">{beatInfo.quantum}</Text>
           </Box>
+
+          <Box>
+            <Text color="cyan">Speed: </Text>
+            <Text color={schedulerStatus.playbackSpeed === 1.0 ? 'cyanBright' : 'yellowBright'}>
+              {schedulerStatus.playbackSpeed.toFixed(1)}x
+            </Text>
+            <Text> | </Text>
+            <Text color="green">Effective BPM: </Text>
+            <Text color="greenBright">
+              {(beatInfo.bpm * schedulerStatus.playbackSpeed).toFixed(1)}
+            </Text>
+            <Text dimColor> (notes play at this tempo)</Text>
+          </Box>
         </Box>
 
         <Newline />
@@ -419,6 +472,10 @@ const MidiSchedulerComponent = ({ link, initialPattern = null }) => {
             <Text>F         - Load pattern.json</Text>
             <Text>E         - Export current pattern</Text>
             <Text>[/]       - Adjust latency</Text>
+            <Text>+/-       - Adjust playback speed</Text>
+            <Text>\         - Reset speed to 1.0x</Text>
+            <Text>/         - Toggle half speed (0.5x)</Text>
+            <Text>*         - Toggle double speed (2.0x)</Text>
             <Text>H         - Toggle help</Text>
             <Text>Q         - Quit</Text>
           </Box>
