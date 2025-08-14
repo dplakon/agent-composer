@@ -441,14 +441,23 @@ export class Conductor extends EventEmitter {
 
   /**
    * Convert composition to scheduler events
+   * @param {Object} composition - The composition to convert
+   * @param {number} startBar - The starting bar number
+   * @param {number} playbackSpeed - Speed multiplier for note durations (default: 1.0)
    */
-  toSchedulerEvents(composition, startBar = 0) {
+  toSchedulerEvents(composition, startBar = 0, playbackSpeed = 1.0) {
     const events = [];
+    
+    // Apply speed multiplier (inverse - faster speed = shorter durations)
+    const durationMultiplier = 1.0 / playbackSpeed;
     
     composition.tracks.forEach(track => {
       let currentBeat = 0;
       
       track.notes.forEach(note => {
+        // Apply speed multiplier to duration
+        const adjustedDuration = note.duration * durationMultiplier;
+        
         // Add note event
         events.push({
           type: 'note',
@@ -456,11 +465,12 @@ export class Conductor extends EventEmitter {
           beat: currentBeat % 4,
           note: note.pitch,
           velocity: note.velocity || 100,
-          duration: note.duration,
+          duration: adjustedDuration,
           channel: track.channel || 0
         });
         
-        currentBeat += note.duration;
+        // Advance position by adjusted duration
+        currentBeat += adjustedDuration;
       });
     });
     
@@ -468,42 +478,105 @@ export class Conductor extends EventEmitter {
   }
 
   /**
-   * Start continuous generation
+   * Start continuous generation (event-driven)
    */
   async startContinuousGeneration(options = {}) {
     console.log('🎼 Starting continuous generation...');
     
-    this.generationLoop = setInterval(async () => {
-      // Check if we need to generate more
-      const barsAhead = options.barsAhead || 16; // Generate when we have less than 16 bars queued
-      const currentQueueSize = this.generationQueue.length * 8; // Each segment is 8 bars
-      
-      if (currentQueueSize < barsAhead && !this.isGenerating) {
-        const composition = await this.generate(options);
-        
-        if (composition) {
-          // Add to queue
-          this.generationQueue.push(composition);
-          
-          // Convert to events for scheduler
-          const events = this.toSchedulerEvents(composition, this.currentBar);
-          this.currentBar += 8;
-          
-          // Emit events for scheduler
-          this.emit('scheduleEvents', events);
+    // Store generation options
+    this.continuousOptions = options;
+    this.continuousGenerationActive = true;
+    this.barsScheduled = 0;  // Track how many bars we've scheduled
+    
+    // Trigger first generation immediately
+    this.checkAndGenerate();
+    
+    // Also set up a fallback timer to check periodically
+    // This ensures generation continues even if events get missed
+    this.fallbackTimer = setInterval(() => {
+      if (this.continuousGenerationActive && !this.isGenerating) {
+        const bars = this.barsScheduled || 0;
+        if (bars < 24) {  // Trigger when buffer drops below 24 bars
+          console.log(`⏰ Fallback timer: buffer at ${bars.toFixed(1)} bars, checking...`);
+          this.checkAndGenerate();
         }
       }
-    }, options.checkInterval || 5000); // Check every 5 seconds
+    }, 1500); // Check every 1.5 seconds as a fallback
+  }
+  
+  /**
+   * Check if we need to generate and do so immediately
+   */
+  async checkAndGenerate() {
+    if (!this.continuousGenerationActive) return;
+    
+    const options = this.continuousOptions || {};
+    const targetBuffer = 32;  // Target buffer to maintain
+    
+    // Calculate how many timeline bars we have scheduled
+    const timelineBarsScheduled = this.barsScheduled || 0;
+    
+    // Generate if we're below the target buffer and not already generating
+    if (timelineBarsScheduled < targetBuffer && !this.isGenerating) {
+      // Generate a composition - it will be scheduled via the compositionGenerated event
+      await this.generate(options);
+      
+      // After generation, check if we need more
+      if (this.continuousGenerationActive && this.barsScheduled < targetBuffer) {
+        // Use setImmediate to continue generation chain
+        setImmediate(() => this.checkAndGenerate());
+      }
+    }
   }
 
   /**
    * Stop continuous generation
    */
   stopContinuousGeneration() {
-    if (this.generationLoop) {
-      clearInterval(this.generationLoop);
-      this.generationLoop = null;
-      console.log('🛑 Stopped continuous generation');
+    this.continuousGenerationActive = false;
+    this.continuousOptions = null;
+    
+    // Clear fallback timer
+    if (this.fallbackTimer) {
+      clearInterval(this.fallbackTimer);
+      this.fallbackTimer = null;
+    }
+    
+    // Reset tracking
+    this.barsScheduled = 0;
+    
+    console.log('🛑 Stopped continuous generation');
+  }
+  
+  /**
+   * Manually trigger a generation check
+   * Useful for triggering generation after events like scheduling
+   */
+  triggerGenerationCheck() {
+    if (this.continuousGenerationActive && !this.isGenerating) {
+      setImmediate(() => this.checkAndGenerate());
+    }
+  }
+  
+  /**
+   * Update bars consumed (called as bars are played)
+   * @param {number} bars - Timeline bars consumed (not music bars)
+   */
+  consumeBars(bars) {
+    if (this.barsScheduled !== undefined && bars > 0) {
+      const previousBars = this.barsScheduled;
+      this.barsScheduled = Math.max(0, this.barsScheduled - bars);
+      
+      // Log consumption for debugging
+      if (bars > 0) {
+        console.log(`🎵 Consumed ${bars} bars, buffer: ${this.barsScheduled.toFixed(1)} bars remaining`);
+      }
+      
+      // Trigger generation check if we're running low (below 20 bars)
+      if (this.continuousGenerationActive && this.barsScheduled < 20) {
+        console.log('⚡ Buffer low, triggering generation check...');
+        this.triggerGenerationCheck();
+      }
     }
   }
 
@@ -516,7 +589,8 @@ export class Conductor extends EventEmitter {
       historySize: this.compositionHistory.length,
       queueSize: this.generationQueue.length,
       isGenerating: this.isGenerating,
-      currentBar: this.currentBar
+      currentBar: this.currentBar,
+      barsScheduled: this.barsScheduled || 0
     };
   }
 

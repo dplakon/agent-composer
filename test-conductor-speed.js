@@ -1,5 +1,88 @@
 #!/usr/bin/env node
 
+/**
+ * Test script for conductor playback speed multiplier
+ * Tests that the conductor applies speed multiplier to note durations
+ */
+
+import { Conductor } from './src/services/conductor.js';
+
+console.log('🧪 Testing Conductor Playback Speed Multiplier\n');
+
+// Create a test composition object (mimics the structure)
+const testComposition = {
+  metadata: {
+    bars: 8,
+    time_signature: '4/4',
+    tempo: 120,
+    key: 'C major'
+  },
+  tracks: [
+    {
+      name: 'melody',
+      channel: 0,
+      notes: [
+        { pitch: 60, duration: 1, velocity: 100 },
+        { pitch: 62, duration: 1, velocity: 100 },
+        { pitch: 64, duration: 2, velocity: 100 },
+        { pitch: 65, duration: 1, velocity: 100 },
+        { pitch: 67, duration: 1, velocity: 100 },
+        { pitch: 69, duration: 2, velocity: 100 }
+      ],
+      getTotalDuration: function() {
+        return this.notes.reduce((sum, note) => sum + note.duration, 0);
+      }
+    }
+  ]
+};
+
+// Create conductor instance (no API key needed for this test)
+const conductor = new Conductor({
+  provider: 'openai',
+  model: 'gpt-3.5-turbo',
+  apiKey: 'test-key'
+});
+
+console.log('Original composition:');
+console.log('  Notes: C(1 beat), D(1 beat), E(2 beats), F(1 beat), G(1 beat), A(2 beats)');
+console.log('  Total duration: 8 beats (2 bars)\n');
+
+// Test different playback speeds
+const speeds = [0.5, 1.0, 2.0];
+
+speeds.forEach(speed => {
+  console.log(`\n📊 Testing with playback speed: ${speed}x`);
+  console.log('─'.repeat(50));
+  
+  // Convert to scheduler events with speed multiplier
+  const events = conductor.toSchedulerEvents(testComposition, 0, speed);
+  
+  // Calculate actual durations
+  let totalDuration = 0;
+  events.forEach((event, index) => {
+    console.log(`  Event ${index + 1}: Note ${event.note}, Duration: ${event.duration.toFixed(2)} beats, Bar: ${event.bar}, Beat: ${event.beat.toFixed(2)}`);
+    totalDuration += event.duration;
+  });
+  
+  console.log(`\n  Total duration: ${totalDuration.toFixed(2)} beats`);
+  console.log(`  Expected duration: ${(8 / speed).toFixed(2)} beats (8 beats ÷ ${speed})`);
+  
+  // Verify the math
+  const expectedDuration = 8 / speed;
+  const isCorrect = Math.abs(totalDuration - expectedDuration) < 0.01;
+  console.log(`  ✅ Duration calculation: ${isCorrect ? 'CORRECT' : 'INCORRECT'}`);
+});
+
+console.log('\n\n📝 Summary:');
+console.log('─'.repeat(50));
+console.log('• Speed 0.5x: Notes play at half speed (durations doubled)');
+console.log('• Speed 1.0x: Notes play at normal speed');
+console.log('• Speed 2.0x: Notes play at double speed (durations halved)');
+console.log('\nThe duration multiplier correctly scales note durations inversely');
+console.log('with the playback speed (faster speed = shorter durations).');
+
+console.log('\n✨ Test complete!');
+
 import { spawn } from 'child_process';
 import { setTimeout } from 'timers/promises';
 

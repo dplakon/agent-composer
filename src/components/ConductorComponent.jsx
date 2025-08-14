@@ -99,15 +99,28 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
     // Generate single composition
     if (input === 'g') {
       generateComposition();
+      
+      // If auto-generate is on, ensure continuous generation is running
+      if (autoGenerate && conductor.current && !conductor.current.continuousGenerationActive) {
+        startContinuousGeneration();
+      }
     }
 
     // Toggle auto-generation
     if (input === 'a') {
-      setAutoGenerate(!autoGenerate);
-      if (autoGenerate && scheduler.current?.isRunning) {
-        startContinuousGeneration();
-      } else if (conductor.current) {
-        conductor.current.stopContinuousGeneration();
+      const newAutoGenerate = !autoGenerate;
+      setAutoGenerate(newAutoGenerate);
+      
+      if (newAutoGenerate) {
+        // Turning ON auto-generation
+        if (scheduler.current?.isRunning && conductor.current) {
+          startContinuousGeneration();
+        }
+      } else {
+        // Turning OFF auto-generation
+        if (conductor.current) {
+          conductor.current.stopContinuousGeneration();
+        }
       }
     }
 
@@ -224,6 +237,7 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
       });
 
       conductor.current.on('scheduleEvents', (events) => {
+        // Note: These events should already be speed-adjusted from toSchedulerEvents
         // Add events to scheduler
         events.forEach(event => {
           scheduler.current.addNote({
@@ -286,11 +300,17 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
     const composition = await conductor.current.generate({
       style: stylePrompt,
       tempo: link.bpm,
-      key: 'C major'
+      key: 'C major',
+      playbackSpeed: scheduler.current?.getPlaybackSpeed ? scheduler.current.getPlaybackSpeed() : 1.0
     });
 
     if (composition) {
       scheduleComposition(composition);
+      
+      // Immediately check if we need another generation
+      if (autoGenerate && conductor.current.triggerGenerationCheck) {
+        conductor.current.triggerGenerationCheck();
+      }
     }
   };
 
@@ -305,10 +325,13 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
     // Schedule events 2 bars ahead to ensure they're in the future
     const startBar = Math.max(nextBarToSchedule.current, currentBar + 2);
     
-    // Convert to scheduler events
-    const events = conductor.current.toSchedulerEvents(composition, startBar);
+    // Get current playback speed from scheduler
+    const playbackSpeed = scheduler.current.getPlaybackSpeed ? scheduler.current.getPlaybackSpeed() : 1.0;
     
-    console.log(`🎵 Scheduling ${events.length} events starting at bar ${startBar}`);
+    // Convert to scheduler events with playback speed adjustment
+    const events = conductor.current.toSchedulerEvents(composition, startBar, playbackSpeed);
+    
+    console.log(`🎵 Scheduling ${events.length} events starting at bar ${startBar} (speed: ${playbackSpeed.toFixed(1)}x)`);
     
     // Add to scheduler
     events.forEach(event => {
@@ -322,8 +345,20 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
       });
     });
 
-    // Update next bar position
-    nextBarToSchedule.current = startBar + 8;
+    // Update next bar position - adjust for playback speed
+    // When playing faster, we consume bars quicker
+    const timelineBars = 8 / playbackSpeed;  // How many timeline bars this represents
+    nextBarToSchedule.current = startBar + timelineBars;
+    
+    // Update conductor's tracking
+    if (conductor.current) {
+      conductor.current.currentBar = startBar + timelineBars;
+      // Track bars scheduled for continuous generation
+      if (conductor.current.continuousGenerationActive) {
+        conductor.current.barsScheduled = (conductor.current.barsScheduled || 0) + timelineBars;
+        console.log(`📊 Buffer: ${conductor.current.barsScheduled.toFixed(1)} timeline bars`);
+      }
+    }
 
     // If scheduler is not running, start it
     if (!scheduler.current.isRunning) {
@@ -331,6 +366,11 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
     }
 
     updateStatus();
+    
+    // Trigger next generation immediately if auto-generate is on
+    if (autoGenerate && conductor.current && conductor.current.triggerGenerationCheck) {
+      conductor.current.triggerGenerationCheck();
+    }
   };
 
   // Start continuous generation
@@ -339,13 +379,23 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
 
     // Use custom prompt if active, otherwise use preset style
     const stylePrompt = isUsingCustomStyle ? customPrompt : style;
+    const playbackSpeed = scheduler.current?.getPlaybackSpeed ? scheduler.current.getPlaybackSpeed() : 1.0;
+    
+    // Initialize bars scheduled based on what's already queued
+    const currentBeat = link.beat || 0;
+    const currentBar = Math.floor(currentBeat / 4);
+    const barsAlreadyScheduled = Math.max(0, nextBarToSchedule.current - currentBar);
     
     conductor.current.startContinuousGeneration({
       style: stylePrompt,
       tempo: link.bpm,
-      barsAhead: 16,
-      checkInterval: 4000
+      playbackSpeed: playbackSpeed
     });
+    
+    // Set initial buffer if we have bars already scheduled
+    if (barsAlreadyScheduled > 0) {
+      conductor.current.barsScheduled = barsAlreadyScheduled;
+    }
   };
 
   // Update status
@@ -371,9 +421,11 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
   // Link update loop
   useEffect(() => {
     let lastBeat = 0;
+    let lastBarPlayed = 0;
 
     link.startUpdate(60, (beat, phase, bpm) => {
       const currentBeat = Math.floor(beat);
+      const currentBar = Math.floor(currentBeat / 4);
 
       setBeatInfo({
         beat: currentBeat,
@@ -386,17 +438,15 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
       // Update status periodically
       if (currentBeat !== lastBeat) {
         updateStatus();
-        lastBeat = currentBeat;
-
-        // Check if we need to generate more
-        if (autoGenerate && conductor.current) {
-          const barsPlayed = currentBeat / 4;
-          const barsRemaining = nextBarToSchedule.current - barsPlayed;
-          
-          if (barsRemaining < 12 && !conductor.current.isGenerating) {
-            generateComposition();
-          }
+        
+        // Track bar consumption
+        if (currentBar > lastBarPlayed && conductor.current && autoGenerate) {
+          const barsConsumed = currentBar - lastBarPlayed;
+          conductor.current.consumeBars(barsConsumed);
+          lastBarPlayed = currentBar;
         }
+        
+        lastBeat = currentBeat;
       }
     });
 
@@ -482,6 +532,7 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
           <Text>Generations: {conductorStatus.generationCount}</Text>
           <Text>Queue: {conductorStatus.queueSize} segments</Text>
           <Text>Current Bar: {conductorStatus.currentBar}</Text>
+          <Text>Bars Scheduled: {conductorStatus.barsScheduled?.toFixed(1) || '0'}</Text>
           {conductorStatus.isGenerating && (
             <Text color="yellow">⏳ Generating...</Text>
           )}
