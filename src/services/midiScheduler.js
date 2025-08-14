@@ -327,6 +327,18 @@ export class MidiScheduler extends EventEmitter {
     const msPerBeat = 60000 / effectiveBpm;
     const quantum = this.link.quantum || 4;
     
+    // Track the "virtual beat" position when playing at different speeds
+    // This is used for non-looping events to determine their execution time
+    if (!this.virtualBeatOffset) {
+      this.virtualBeatOffset = 0;
+      this.lastUpdateBeat = currentBeat;
+    }
+    
+    // Update virtual beat offset based on playback speed
+    const beatDelta = currentBeat - this.lastUpdateBeat;
+    this.virtualBeatOffset += beatDelta * (this.playbackSpeed - 1);
+    this.lastUpdateBeat = currentBeat;
+    
     // Debug log once per 10 seconds if there are events
     if (this.events.length > 0 && (!this._lastDebugTime || now - this._lastDebugTime > 10000)) {
       this._lastDebugTime = now;
@@ -374,7 +386,9 @@ export class MidiScheduler extends EventEmitter {
           targetBeat = currentBeat + (this.loopLength - currentPositionInLoop + eventPositionInLoop) / this.playbackSpeed;
         }
       } else {
-        // Non-looping: event plays at its absolute position
+        // Non-looping: events are scheduled at absolute beat positions
+        // For conductor mode, we want events to maintain their relative timing
+        // but play back at the adjusted speed
         targetBeat = eventBeat;
       }
       
@@ -492,14 +506,19 @@ export class MidiScheduler extends EventEmitter {
    * @param {number} speed - Playback speed multiplier (0.1 to 4.0, where 1.0 is normal)
    */
   setPlaybackSpeed(speed) {
+    const oldSpeed = this.playbackSpeed;
+    
     // Clamp speed to reasonable bounds
     this.playbackSpeed = Math.max(0.1, Math.min(4.0, speed));
     this.emit('playbackSpeedChanged', this.playbackSpeed);
     
-    // Reset event execution flags when speed changes significantly
+    // Reset event execution flags when speed changes
     // This helps prevent timing issues when changing speed during playback
-    if (Math.abs(speed - this.playbackSpeed) > 0.2) {
+    if (Math.abs(oldSpeed - this.playbackSpeed) > 0.05) {
       this.events.forEach(e => e.executed = false);
+      // Reset virtual beat tracking when speed changes
+      this.virtualBeatOffset = 0;
+      this.lastUpdateBeat = this.link?.beat || 0;
     }
   }
 
