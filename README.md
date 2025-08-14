@@ -180,10 +180,14 @@ The AI Conductor uses LLM (Large Language Model) technology to generate musical 
 - **Space** - Start/Stop the scheduler
 - **G** - Generate a single 8-bar composition
 - **A** - Toggle auto-generation (continuous music)
-- **S** - Cycle through music styles (Electronic, Jazz, Classical, etc.)
+- **S** - Enter custom style prompt
+- **1-6** - Quick select preset styles
 - **L** - Toggle loop mode
 - **C** - Clear all events
-- **R** - Reset everything
+- **+/-** - Adjust playback speed (0.1x to 4.0x)
+- **\** - Reset speed to 1.0x
+- **/** - Toggle half speed (0.5x)
+- **\*** - Toggle double speed (2.0x)
 - **H** - Show help
 - **Q** - Quit
 
@@ -193,6 +197,7 @@ The AI Conductor uses LLM (Large Language Model) technology to generate musical 
 2. The LLM returns structured JSON with melody, bass, chords, and drums
 3. These patterns are scheduled to play via MIDI in perfect sync with Link
 4. In auto-generation mode, new segments are generated seamlessly
+5. **NEW**: Playback speed can be adjusted independently from Link tempo
 
 For detailed documentation, see [docs/CONDUCTOR.md](docs/CONDUCTOR.md)
 
@@ -212,12 +217,16 @@ npm run scheduler -- --pattern patterns/example-pattern.json
 
 - **Space** - Start/Stop playback
 - **C** - Clear all events
-- **R** - Reset to beginning
 - **L** - Toggle loop mode
-- **P** - Load pattern from file
+- **1-5** - Select preset patterns
+- **F** - Load pattern from file
 - **E** - Export current pattern
-- **1-4** - Select preset patterns
 - **[/]** - Adjust latency compensation
+- **+/-** - Adjust playback speed (0.1x to 4.0x)
+- **\** - Reset speed to 1.0x
+- **/** - Toggle half speed (0.5x)
+- **\*** - Toggle double speed (2.0x)
+- **H** - Show help
 - **Q** - Quit
 
 ## Latency Compensation

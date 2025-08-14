@@ -21,7 +21,8 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
     isRunning: false,
     totalEvents: 0,
     eventsExecuted: 0,
-    notesPlayed: 0
+    notesPlayed: 0,
+    playbackSpeed: 1.0
   });
 
   const [beatInfo, setBeatInfo] = useState({
@@ -147,6 +148,45 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
         } else {
           scheduler.current.setLoop(32, 0); // 8 bars
         }
+      }
+    }
+
+    // Playback speed controls
+    if (input === '-' || input === '_') {
+      if (scheduler.current) {
+        const currentSpeed = scheduler.current.getPlaybackSpeed();
+        const newSpeed = Math.max(0.1, currentSpeed - 0.1);
+        scheduler.current.setPlaybackSpeed(newSpeed);
+        updateStatus();
+      }
+    }
+    if (input === '+' || input === '=') {
+      if (scheduler.current) {
+        const currentSpeed = scheduler.current.getPlaybackSpeed();
+        const newSpeed = Math.min(4.0, currentSpeed + 0.1);
+        scheduler.current.setPlaybackSpeed(newSpeed);
+        updateStatus();
+      }
+    }
+    // Quick speed presets
+    if (input === '\\') {
+      if (scheduler.current) {
+        scheduler.current.setPlaybackSpeed(1.0); // Reset to normal
+        updateStatus();
+      }
+    }
+    if (input === '/') {
+      if (scheduler.current) {
+        const currentSpeed = scheduler.current.getPlaybackSpeed();
+        scheduler.current.setPlaybackSpeed(currentSpeed === 0.5 ? 1.0 : 0.5); // Toggle half speed
+        updateStatus();
+      }
+    }
+    if (input === '*') {
+      if (scheduler.current) {
+        const currentSpeed = scheduler.current.getPlaybackSpeed();
+        scheduler.current.setPlaybackSpeed(currentSpeed === 2.0 ? 1.0 : 2.0); // Toggle double speed
+        updateStatus();
       }
     }
   });
@@ -312,7 +352,11 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
   const updateStatus = () => {
     if (scheduler.current) {
       const stats = scheduler.current.getStats();
-      setSchedulerStatus(stats);
+      const playbackSpeed = scheduler.current.getPlaybackSpeed();
+      setSchedulerStatus({
+        ...stats,
+        playbackSpeed
+      });
     }
 
     if (conductor.current) {
@@ -416,6 +460,19 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
             <Text color="yellow">Bars Queued: </Text>
             <Text color="yellowBright">{nextBarToSchedule.current}</Text>
           </Box>
+
+          <Box>
+            <Text color="cyan">Speed: </Text>
+            <Text color={schedulerStatus.playbackSpeed === 1.0 ? 'cyanBright' : 'yellowBright'}>
+              {schedulerStatus.playbackSpeed.toFixed(1)}x
+            </Text>
+            <Text> | </Text>
+            <Text color="green">Effective BPM: </Text>
+            <Text color="greenBright">
+              {(beatInfo.bpm * schedulerStatus.playbackSpeed).toFixed(1)}
+            </Text>
+            <Text dimColor> (MIDI tempo)</Text>
+          </Box>
         </Box>
 
         <Newline />
@@ -471,15 +528,19 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
         <Box borderStyle="single" borderColor="gray" padding={1}>
           <Box flexDirection="column">
             <Text color="yellow" bold>Controls:</Text>
-            <Text>Space     - Start/Stop scheduler</Text>
-            <Text>G         - Generate single composition</Text>
-            <Text>A         - Toggle auto-generation</Text>
-            <Text>S         - Enter custom style prompt</Text>
-            <Text>1-6       - Quick select preset styles</Text>
-            <Text>L         - Toggle loop mode</Text>
-            <Text>C         - Clear and reset</Text>
-            <Text>H         - Toggle help</Text>
-            <Text>Q         - Quit</Text>
+            <Text key="space">Space     - Start/Stop scheduler</Text>
+            <Text key="g">G         - Generate single composition</Text>
+            <Text key="a">A         - Toggle auto-generation</Text>
+            <Text key="s">S         - Enter custom style prompt</Text>
+            <Text key="nums">1-6       - Quick select preset styles</Text>
+            <Text key="l">L         - Toggle loop mode</Text>
+            <Text key="c">C         - Clear and reset</Text>
+            <Text key="plus">+/-       - Adjust playback speed</Text>
+            <Text key="backslash">\         - Reset speed to 1.0x</Text>
+            <Text key="slash">/         - Toggle half speed (0.5x)</Text>
+            <Text key="star">*         - Toggle double speed (2.0x)</Text>
+            <Text key="h">H         - Toggle help</Text>
+            <Text key="q">Q         - Quit</Text>
             <Newline />
             <Text color="cyan">Preset Styles: {styles.join(', ')}</Text>
             {isUsingCustomStyle && (
