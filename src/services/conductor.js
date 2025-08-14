@@ -6,7 +6,7 @@ import crypto from 'crypto';
 /**
  * Music generation prompt templates
  */
-const SYSTEM_PROMPT = `You are a professional SATB composer. Generate complete 8-bar compositions with EXACTLY 32.0 beats per voice.
+const SYSTEM_PROMPT = `You are a professional 4 voice SATB composer. Generate complete 8-bar compositions with EXACTLY 32.0 beats per voice.
 
 CRITICAL REQUIREMENT: Generate exactly 8 bars of music (32 beats in 4/4 time).
 
@@ -58,15 +58,17 @@ RULES:
 - Pitch: MIDI note numbers (0-127) - Middle C = 60
 - Duration: In beats (0.25, 0.5, 1.0, 2.0, etc.)
 - Velocity: MIDI velocity (1-127)
+- Use Velocity to indicate dynamic changes
 - Notes are sequential (no overlaps within a track)
 - Multiple tracks can play simultaneously
-- Voice ranges: Soprano C4-G5, Alto G3-D5, Tenor C3-G4, Bass E2-C4
+- Voice ranges: Soprano C4-C5, Alto G3-G5, Tenor C3-C4, Bass G1-G3
 - It's ok to let some voices rest sometimes for dramatic effect.
 
 IMPORTANT:
 - Output ONLY valid JSON, no explanations or markdown
 - Verify each track totals exactly 32 beats
-- Keep it musical and coherent`;
+- Keep it musical and coherent
+- Each voice MUST only play one note at a time`;
 
 /**
  * Note event structure
