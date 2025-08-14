@@ -162,8 +162,9 @@ export class MidiScheduler extends EventEmitter {
     
     // Sort events by beat position
     this.events.sort((a, b) => {
-      const beatA = a.getAbsoluteBeat(this.link.quantum);
-      const beatB = b.getAbsoluteBeat(this.link.quantum);
+      const quantum = this.link?.quantum || 4;
+      const beatA = a.getAbsoluteBeat(quantum);
+      const beatB = b.getAbsoluteBeat(quantum);
       return beatA - beatB;
     });
     
@@ -203,10 +204,11 @@ export class MidiScheduler extends EventEmitter {
     });
     
     // Calculate note off position
-    const absoluteBeat = bar * this.link.quantum + beat;
+    const quantum = this.link?.quantum || 4;
+    const absoluteBeat = bar * quantum + beat;
     const offBeat = absoluteBeat + duration;
-    const offBar = Math.floor(offBeat / this.link.quantum);
-    const offBeatInBar = offBeat % this.link.quantum;
+    const offBar = Math.floor(offBeat / quantum);
+    const offBeatInBar = offBeat % quantum;
     
     // Schedule note off
     this.addEvent({
@@ -309,13 +311,25 @@ export class MidiScheduler extends EventEmitter {
    * Main scheduling logic
    */
   scheduleEvents() {
-    if (!this.isRunning || !this.midiService || !this.link) return;
+    if (!this.isRunning || !this.midiService || !this.link) {
+      return;
+    }
     
     const now = Date.now();
     const lookAheadEnd = now + this.lookaheadTime;
     const currentBeat = this.link.beat || 0;
     const bpm = this.link.bpm || 120;
     const msPerBeat = 60000 / bpm;
+    const quantum = this.link.quantum || 4;
+    
+    // Debug log once per 10 seconds if there are events
+    if (this.events.length > 0 && (!this._lastDebugTime || now - this._lastDebugTime > 10000)) {
+      this._lastDebugTime = now;
+      const pendingEvents = this.events.filter(e => !e.executed).length;
+      if (pendingEvents > 0) {
+        console.log(`⏱ Scheduler: ${pendingEvents}/${this.events.length} events pending, beat=${currentBeat.toFixed(2)}`);
+      }
+    }
     
     // Process events that should be scheduled
     this.events.forEach(event => {
@@ -323,7 +337,7 @@ export class MidiScheduler extends EventEmitter {
       if (event.executed && this.loopLength === 0) return;
       
       // Get the absolute beat position of the event
-      const eventBeat = event.getAbsoluteBeat(this.link.quantum);
+      const eventBeat = event.getAbsoluteBeat(quantum);
       
       // Calculate the target beat for this event
       let targetBeat = eventBeat;
@@ -386,7 +400,15 @@ export class MidiScheduler extends EventEmitter {
    * @param {MidiEvent} event - Event to execute
    */
   executeEvent(event) {
-    if (!this.midiService || !this.midiService.isConnected) return;
+    if (!this.midiService) {
+      console.warn('No MIDI service available');
+      return;
+    }
+    
+    if (!this.midiService.isConnected) {
+      console.warn('MIDI service not connected');
+      return;
+    }
     
     switch (event.type) {
       case EventType.NOTE_ON:

@@ -12,6 +12,8 @@ A beautiful command-line interface for monitoring Ableton Link beat information 
 - ▶️ Play state synchronization
 - 🎹 **Virtual MIDI output** - Send MIDI notes synchronized to Link beats
 - 🎛️ MIDI clock output for tempo sync
+- 🤖 **AI Conductor** - LLM-powered music generation synchronized with Link
+- 🎼 **MIDI Scheduler** - Advanced pattern sequencing with beat-perfect timing
 
 ## Prerequisites
 
@@ -51,11 +53,22 @@ ableton-link-cli
 ## Usage
 
 ```bash
-# Start with default settings (120 BPM, quantum 4)
+# If running directly without global install, use:
+./cli.cjs [options]
+# OR use npm scripts:
+npm run conductor
+
+# After global install:
 ableton-link-cli
 
 # Enable MIDI output (sends C4 notes on every beat)
 ableton-link-cli --midi
+
+# Run the MIDI scheduler with patterns
+ableton-link-cli --scheduler
+
+# Run the AI Conductor (requires API key)
+ableton-link-cli --conductor
 
 # Set custom BPM
 ableton-link-cli --bpm 128
@@ -75,6 +88,12 @@ ableton-link-cli --help
 - `--bpm, -b` - Initial BPM (default: 120)
 - `--quantum, -q` - Quantum/Bar length (default: 4)
 - `--midi, -m` - Enable MIDI output (default: false)
+- `--scheduler, -s` - Enable MIDI scheduler mode (default: false)
+- `--conductor` - Enable AI conductor mode (default: false)
+- `--pattern, -p` - Load pattern file for scheduler
+- `--provider` - LLM provider: openai or anthropic (default: openai)
+- `--model` - LLM model to use
+- `--api-key` - API key for LLM provider
 - `--latency, -l` - MIDI latency compensation in ms (-100 to 100, default: 0)
 - `--controls, -c` - Enable keyboard controls (default: true)
 - `--help, -h` - Show help message
@@ -129,6 +148,77 @@ The CLI shows:
 - Press **Shift+[/]** to adjust latency (±10ms)
 - Press **0** to reset latency
 - The CLI sends MIDI clock for tempo synchronization
+
+## AI Conductor Mode
+
+The AI Conductor uses LLM (Large Language Model) technology to generate musical compositions in real-time, synchronized with Ableton Link.
+
+### Setup
+
+1. **Get an API key** from either:
+   - [OpenAI](https://platform.openai.com/api-keys) for GPT models
+   - [Anthropic](https://console.anthropic.com/) for Claude models
+
+2. **Set your API key**:
+   ```bash
+   export OPENAI_API_KEY="your-api-key-here"
+   # OR
+   export ANTHROPIC_API_KEY="your-api-key-here"
+   ```
+
+3. **Run the conductor**:
+   ```bash
+   # Use OpenAI (default)
+   npm run conductor
+   
+   # Use Anthropic Claude
+   npm run conductor-anthropic
+   ```
+
+### Conductor Controls
+
+- **Space** - Start/Stop the scheduler
+- **G** - Generate a single 8-bar composition
+- **A** - Toggle auto-generation (continuous music)
+- **S** - Cycle through music styles (Electronic, Jazz, Classical, etc.)
+- **L** - Toggle loop mode
+- **C** - Clear all events
+- **R** - Reset everything
+- **H** - Show help
+- **Q** - Quit
+
+### How It Works
+
+1. The conductor prompts an LLM to generate musical patterns
+2. The LLM returns structured JSON with melody, bass, chords, and drums
+3. These patterns are scheduled to play via MIDI in perfect sync with Link
+4. In auto-generation mode, new segments are generated seamlessly
+
+For detailed documentation, see [docs/CONDUCTOR.md](docs/CONDUCTOR.md)
+
+## MIDI Scheduler Mode
+
+The MIDI Scheduler provides advanced pattern sequencing capabilities:
+
+```bash
+# Run the scheduler
+npm run scheduler
+
+# Load a pattern file
+npm run scheduler -- --pattern patterns/example-pattern.json
+```
+
+### Scheduler Controls
+
+- **Space** - Start/Stop playback
+- **C** - Clear all events
+- **R** - Reset to beginning
+- **L** - Toggle loop mode
+- **P** - Load pattern from file
+- **E** - Export current pattern
+- **1-4** - Select preset patterns
+- **[/]** - Adjust latency compensation
+- **Q** - Quit
 
 ## Latency Compensation
 
@@ -205,10 +295,19 @@ ableton-link-cli/
 │   ├── components/
 │   │   ├── LinkDisplay.jsx           # Basic display component
 │   │   ├── LinkDisplayWithControls.jsx # Component with keyboard controls
-│   │   └── LinkDisplayWithMidi.jsx   # Component with MIDI output
+│   │   ├── LinkDisplayWithMidi.jsx   # Component with MIDI output
+│   │   ├── MidiScheduler.jsx         # MIDI scheduler component
+│   │   └── ConductorComponent.jsx    # AI conductor interface
 │   └── services/
-│       └── midiService.js            # MIDI port and message handling
+│       ├── midiService.js            # MIDI port and message handling
+│       ├── MidiScheduler.js          # Pattern scheduling engine
+│       └── Conductor.js              # LLM integration for music generation
+├── docs/
+│   └── CONDUCTOR.md                  # AI Conductor documentation
+├── patterns/                          # Example pattern files
+│   └── example-pattern.json
 ├── test-midi.js                      # MIDI functionality test
+├── test-conductor.js                 # Conductor service test
 ├── demo.js                           # Demo Link peer
 ├── package.json
 └── README.md

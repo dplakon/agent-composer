@@ -10,6 +10,7 @@ import LinkDisplay from './components/LinkDisplay.jsx';
 import LinkDisplayWithControls from './components/LinkDisplayWithControls.jsx';
 import LinkDisplayWithMidi from './components/LinkDisplayWithMidi.jsx';
 import MidiScheduler from './components/MidiScheduler.jsx';
+import ConductorComponent from './components/ConductorComponent.jsx';
 
 const cli = meow(`
   Usage
@@ -21,7 +22,11 @@ const cli = meow(`
     --controls, -c Enable keyboard controls (default: true)
     --midi, -m     Enable MIDI output (default: false)
     --scheduler, -s Enable MIDI scheduler mode (default: false)
+    --conductor    Enable AI conductor mode (default: false)
     --pattern, -p  Load pattern file for scheduler
+    --provider     LLM provider: openai or anthropic (default: openai)
+    --model        LLM model to use
+    --api-key      API key for LLM provider
     --latency, -l  MIDI latency compensation in ms (default: 0)
     --help, -h     Show help
     --version, -v  Show version
@@ -70,9 +75,23 @@ const cli = meow(`
       shortFlag: 's',
       default: false
     },
+    conductor: {
+      type: 'boolean',
+      default: false
+    },
     pattern: {
       type: 'string',
       shortFlag: 'p'
+    },
+    provider: {
+      type: 'string',
+      default: 'openai'
+    },
+    model: {
+      type: 'string'
+    },
+    apiKey: {
+      type: 'string'
     },
     latency: {
       type: 'number',
@@ -104,7 +123,12 @@ link.enablePlayStateSync();
 let Component;
 let componentProps = { link };
 
-if (cli.flags.scheduler) {
+if (cli.flags.conductor) {
+  Component = ConductorComponent;
+  componentProps.apiKey = cli.flags.apiKey || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY;
+  componentProps.provider = cli.flags.provider;
+  componentProps.model = cli.flags.model;
+} else if (cli.flags.scheduler) {
   Component = MidiScheduler;
   if (cli.flags.pattern) {
     // Load pattern file if provided
