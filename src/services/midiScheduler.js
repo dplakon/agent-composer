@@ -70,9 +70,9 @@ export class MidiScheduler extends EventEmitter {
     this.activeNotes = new Map(); // Track active notes for auto note-off
     
     // Timing
-    this.lookaheadTime = 100;  // ms to look ahead
+    this.lookaheadTime = 200;  // ms to look ahead (increased for high latency compensation)
     this.scheduleInterval = 25; // ms between schedule checks
-    this.latencyCompensation = 0; // ms
+    this.latencyCompensation = 0; // ms (range: -500 to 500)
     this.playbackSpeed = 1.0; // Playback speed multiplier (1.0 = normal speed)
     
     // State
@@ -415,18 +415,30 @@ export class MidiScheduler extends EventEmitter {
       // Check scheduledTime instead of executed to prevent double-scheduling
       const isScheduledForFuture = event.scheduledTime && event.scheduledTime > now;
       
-      if (beatsUntilEvent >= 0 && beatsUntilEvent * msPerBeat <= this.lookaheadTime && !isScheduledForFuture) {
+      // Extend lookahead window when using negative latency compensation
+      // This ensures we can schedule events early enough
+      const effectiveLookahead = this.lookaheadTime + Math.abs(Math.min(0, this.latencyCompensation));
+      
+      if (beatsUntilEvent >= 0 && beatsUntilEvent * msPerBeat <= effectiveLookahead && !isScheduledForFuture) {
         const msUntilEvent = beatsUntilEvent * msPerBeat;
-        const delay = Math.max(0, msUntilEvent + this.latencyCompensation);
+        // Allow negative delays for predictive scheduling (when latencyCompensation is negative)
+        const compensatedDelay = msUntilEvent + this.latencyCompensation;
+        
+        // For negative delays (early scheduling), execute immediately
+        // For positive delays, use setTimeout as normal
+        const delay = Math.max(0, compensatedDelay);
         
         // Mark with scheduled time BEFORE setTimeout to prevent race conditions
-        event.scheduledTime = now + delay;
+        // Use the actual compensated time, not the clamped delay
+        event.scheduledTime = now + compensatedDelay;
         
-        setTimeout(() => {
-          // Double-check the event should still be executed
+        // If delay is 0 (due to negative compensation), execute immediately
+        // Otherwise use setTimeout
+        if (delay === 0 && compensatedDelay < 0) {
+          // Execute immediately for predictive scheduling
           if (this.isRunning) {
             this.executeEvent(event);
-            event.executed = true;  // Mark as executed AFTER actual execution
+            event.executed = true;
           }
           
           // In loop mode, clear scheduling info after execution
@@ -436,7 +448,24 @@ export class MidiScheduler extends EventEmitter {
               event.scheduledTime = null;
             }, 100);
           }
-        }, delay);
+        } else {
+          // Normal delayed execution
+          setTimeout(() => {
+            // Double-check the event should still be executed
+            if (this.isRunning) {
+              this.executeEvent(event);
+              event.executed = true;  // Mark as executed AFTER actual execution
+            }
+            
+            // In loop mode, clear scheduling info after execution
+            if (this.loopLength > 0) {
+              setTimeout(() => {
+                event.executed = false;
+                event.scheduledTime = null;
+              }, 100);
+            }
+          }, delay);
+        }
       }
     });
     
@@ -603,10 +632,16 @@ export class MidiScheduler extends EventEmitter {
 
   /**
    * Set latency compensation
-   * @param {number} ms - Latency in milliseconds
+   * @param {number} ms - Latency in milliseconds (-500 to 500)
    */
   setLatencyCompensation(ms) {
-    this.latencyCompensation = Math.max(-100, Math.min(100, ms));
+    // Increased range from ±100ms to ±500ms for systems with higher latency
+    this.latencyCompensation = Math.max(-500, Math.min(500, ms));
+    
+    // Debug logging when latency is set
+    if (Math.abs(ms) > 100) {
+      console.log(`⚡ High latency compensation set: ${ms}ms`);
+    }
   }
 
   /**
