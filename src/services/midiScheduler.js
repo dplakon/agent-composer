@@ -475,6 +475,11 @@ export class MidiScheduler extends EventEmitter {
       case EventType.CLOCK:
         this.midiService.sendClock();
         break;
+        
+      case 'SAFETY_NOTEOFF':
+        // Execute safety note-offs for segment boundaries
+        this.sendSafetyNoteOffs(event.data.channels, false);
+        break;
     }
     
     this.stats.eventsExecuted++;
@@ -491,6 +496,75 @@ export class MidiScheduler extends EventEmitter {
       this.midiService.sendNoteOff(note, channel);
     });
     this.activeNotes.clear();
+  }
+
+  /**
+   * Safety mechanism: Send note-off to all possible notes on specified channels
+   * This ensures no hanging notes at segment boundaries
+   * @param {Array<number>} channels - Array of MIDI channels to clear (0-15)
+   * @param {boolean} onlyActiveChannels - If true, only clear channels that have active notes
+   */
+  sendSafetyNoteOffs(channels = null, onlyActiveChannels = false) {
+    if (!this.midiService || !this.midiService.isConnected) {
+      return;
+    }
+
+    // Determine which channels to clear
+    let targetChannels = [];
+    
+    if (onlyActiveChannels) {
+      // Get unique channels from active notes
+      const activeChannels = new Set();
+      this.activeNotes.forEach((event, key) => {
+        const [channel] = key.split('-').map(Number);
+        activeChannels.add(channel);
+      });
+      targetChannels = Array.from(activeChannels);
+    } else if (channels) {
+      targetChannels = channels;
+    } else {
+      // Default: clear first 16 channels (all standard MIDI channels)
+      targetChannels = Array.from({ length: 16 }, (_, i) => i);
+    }
+
+    // Send note-off for all possible notes on target channels
+    console.log(`🔒 Sending safety note-offs for channels: ${targetChannels.join(', ')}`);
+    
+    targetChannels.forEach(channel => {
+      // Send note-off for all 128 possible MIDI notes
+      for (let note = 0; note < 128; note++) {
+        this.midiService.sendNoteOff(note, channel);
+      }
+    });
+
+    // Clear active notes tracking for affected channels
+    const keysToRemove = [];
+    this.activeNotes.forEach((event, key) => {
+      const [channel] = key.split('-').map(Number);
+      if (targetChannels.includes(channel)) {
+        keysToRemove.push(key);
+      }
+    });
+    keysToRemove.forEach(key => this.activeNotes.delete(key));
+    
+    this.emit('safetyNoteOffs', { channels: targetChannels, count: targetChannels.length * 128 });
+  }
+
+  /**
+   * Schedule safety note-offs at a specific beat position
+   * @param {number} beat - Beat position to send safety note-offs
+   * @param {Array<number>} channels - Channels to clear
+   */
+  scheduleSafetyNoteOffs(beat, channels = null) {
+    const safetyEvent = new MidiEvent({
+      type: 'SAFETY_NOTEOFF',
+      beat: beat,
+      bar: 0,
+      data: { channels }
+    });
+    
+    this.addEvent(safetyEvent);
+    return safetyEvent;
   }
 
   /**

@@ -333,6 +333,26 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
     
     console.log(`🎵 Scheduling ${events.length} events starting at bar ${startBar} (speed: ${playbackSpeed.toFixed(1)}x)`);
     
+    // Extract unique channels used in this composition
+    const usedChannels = new Set();
+    events.forEach(event => {
+      usedChannels.add(event.channel || 0);
+    });
+    const channelsArray = Array.from(usedChannels);
+    
+    // Schedule safety note-offs at the end of this segment
+    // Each composition is 8 bars, but we need to account for playback speed
+    // At 0.5x speed, 8 bars of music takes 16 timeline bars to play
+    const musicBars = 8; // The composition is always 8 bars of music
+    const timelineBarsForSegment = musicBars / playbackSpeed; // How long it takes to play in timeline
+    const segmentEndBar = startBar + timelineBarsForSegment;
+    const segmentEndBeat = (segmentEndBar * link.quantum) - 0.1; // Slightly before the bar boundary
+    
+    if (scheduler.current.scheduleSafetyNoteOffs) {
+      scheduler.current.scheduleSafetyNoteOffs(segmentEndBeat, channelsArray);
+      console.log(`🔒 Scheduled safety note-offs at bar ${segmentEndBar.toFixed(1)} (beat ${segmentEndBeat.toFixed(2)}) for channels: ${channelsArray.join(', ')}`);
+    }
+    
     // Add to scheduler
     events.forEach(event => {
       scheduler.current.addNote({
