@@ -8,7 +8,7 @@ import MidiScheduler, { EventType } from '../services/midiScheduler.js';
 import fs from 'fs';
 import path from 'path';
 
-const MidiSchedulerComponent = ({ link, initialPattern = null }) => {
+const MidiSchedulerComponent = ({ link, initialPattern = null, initialLatency = 0 }) => {
   const [schedulerStatus, setSchedulerStatus] = useState({
     isRunning: false,
     totalEvents: 0,
@@ -107,18 +107,44 @@ const MidiSchedulerComponent = ({ link, initialPattern = null }) => {
     }
 
     // Latency compensation
-    if (input === '[') {
+    if (input === '[' && !key.shift) {
       if (scheduler.current) {
-        const newLatency = (midiStatus.latencyMs || 0) - 1;
+        const currentLatency = scheduler.current.getLatencyCompensation();
+        const newLatency = currentLatency - 1;
         scheduler.current.setLatencyCompensation(newLatency);
         setMidiStatus(prev => ({ ...prev, latencyMs: newLatency }));
       }
     }
-    if (input === ']') {
+    if (input === ']' && !key.shift) {
       if (scheduler.current) {
-        const newLatency = (midiStatus.latencyMs || 0) + 1;
+        const currentLatency = scheduler.current.getLatencyCompensation();
+        const newLatency = currentLatency + 1;
         scheduler.current.setLatencyCompensation(newLatency);
         setMidiStatus(prev => ({ ...prev, latencyMs: newLatency }));
+      }
+    }
+    // Large latency adjustments
+    if (key.shift && input === '[') {
+      if (scheduler.current) {
+        const currentLatency = scheduler.current.getLatencyCompensation();
+        const newLatency = currentLatency - 10;
+        scheduler.current.setLatencyCompensation(newLatency);
+        setMidiStatus(prev => ({ ...prev, latencyMs: newLatency }));
+      }
+    }
+    if (key.shift && input === ']') {
+      if (scheduler.current) {
+        const currentLatency = scheduler.current.getLatencyCompensation();
+        const newLatency = currentLatency + 10;
+        scheduler.current.setLatencyCompensation(newLatency);
+        setMidiStatus(prev => ({ ...prev, latencyMs: newLatency }));
+      }
+    }
+    // Reset latency
+    if (input === '0') {
+      if (scheduler.current) {
+        scheduler.current.setLatencyCompensation(0);
+        setMidiStatus(prev => ({ ...prev, latencyMs: 0 }));
       }
     }
 
@@ -269,10 +295,13 @@ const MidiSchedulerComponent = ({ link, initialPattern = null }) => {
     // Initialize MIDI service
     midiService.current = new MidiService('Link Scheduler');
     const connected = midiService.current.init();
-    setMidiStatus(prev => ({ ...prev, isConnected: connected }));
+    setMidiStatus(prev => ({ ...prev, isConnected: connected, latencyMs: initialLatency }));
 
     // Initialize scheduler
     scheduler.current = new MidiScheduler(midiService.current, link);
+    
+    // Set initial latency compensation
+    scheduler.current.setLatencyCompensation(initialLatency);
 
     // Listen to scheduler events
     scheduler.current.on('eventExecuted', (event) => {
@@ -305,7 +334,7 @@ const MidiSchedulerComponent = ({ link, initialPattern = null }) => {
         midiService.current.close();
       }
     };
-  }, []);
+  }, [initialLatency]);
 
   // Update scheduler status
   const updateSchedulerStatus = () => {
@@ -431,6 +460,14 @@ const MidiSchedulerComponent = ({ link, initialPattern = null }) => {
             </Text>
             <Text dimColor> (notes play at this tempo)</Text>
           </Box>
+
+          <Box>
+            <Text color="blue">Latency: </Text>
+            <Text color={midiStatus.latencyMs === 0 ? 'blueBright' : 'yellowBright'}>
+              {midiStatus.latencyMs > 0 ? '+' : ''}{midiStatus.latencyMs}ms
+            </Text>
+            <Text dimColor> {midiStatus.latencyMs < 0 ? '(notes play earlier)' : midiStatus.latencyMs > 0 ? '(notes play later)' : '(no compensation)'}</Text>
+          </Box>
         </Box>
 
         <Newline />
@@ -471,7 +508,9 @@ const MidiSchedulerComponent = ({ link, initialPattern = null }) => {
             <Text>C         - Clear all events</Text>
             <Text>F         - Load pattern.json</Text>
             <Text>E         - Export current pattern</Text>
-            <Text>[/]       - Adjust latency</Text>
+            <Text>[/]       - Adjust latency (±1ms)</Text>
+            <Text>Shift+[/] - Adjust latency (±10ms)</Text>
+            <Text>0         - Reset latency to 0ms</Text>
             <Text>+/-       - Adjust playback speed</Text>
             <Text>\         - Reset speed to 1.0x</Text>
             <Text>/         - Toggle half speed (0.5x)</Text>

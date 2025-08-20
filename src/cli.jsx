@@ -128,8 +128,10 @@ if (cli.flags.conductor) {
   componentProps.apiKey = cli.flags.apiKey || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY;
   componentProps.provider = cli.flags.provider;
   componentProps.model = cli.flags.model;
+  componentProps.initialLatency = cli.flags.latency;
 } else if (cli.flags.scheduler) {
   Component = MidiScheduler;
+  componentProps.initialLatency = cli.flags.latency;
   if (cli.flags.pattern) {
     // Load pattern file if provided
     try {

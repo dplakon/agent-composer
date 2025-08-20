@@ -8,7 +8,7 @@ import MidiService from '../services/midiService.js';
 import MidiScheduler from '../services/midiScheduler.js';
 import Conductor from '../services/conductor.js';
 
-const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
+const ConductorComponent = ({ link, apiKey, provider = 'openai', model, initialLatency = 0 }) => {
   const [conductorStatus, setConductorStatus] = useState({
     isGenerating: false,
     generationCount: 0,
@@ -22,7 +22,8 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
     totalEvents: 0,
     eventsExecuted: 0,
     notesPlayed: 0,
-    playbackSpeed: 1.0
+    playbackSpeed: 1.0,
+    latencyMs: initialLatency
   });
 
   const [beatInfo, setBeatInfo] = useState({
@@ -202,6 +203,48 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
         updateStatus();
       }
     }
+
+    // Latency compensation controls
+    if (input === '[' && !key.shift) {
+      if (scheduler.current) {
+        const currentLatency = scheduler.current.getLatencyCompensation();
+        const newLatency = currentLatency - 1;
+        scheduler.current.setLatencyCompensation(newLatency);
+        setSchedulerStatus(prev => ({ ...prev, latencyMs: newLatency }));
+      }
+    }
+    if (input === ']' && !key.shift) {
+      if (scheduler.current) {
+        const currentLatency = scheduler.current.getLatencyCompensation();
+        const newLatency = currentLatency + 1;
+        scheduler.current.setLatencyCompensation(newLatency);
+        setSchedulerStatus(prev => ({ ...prev, latencyMs: newLatency }));
+      }
+    }
+    // Large latency adjustments
+    if (key.shift && input === '[') {
+      if (scheduler.current) {
+        const currentLatency = scheduler.current.getLatencyCompensation();
+        const newLatency = currentLatency - 10;
+        scheduler.current.setLatencyCompensation(newLatency);
+        setSchedulerStatus(prev => ({ ...prev, latencyMs: newLatency }));
+      }
+    }
+    if (key.shift && input === ']') {
+      if (scheduler.current) {
+        const currentLatency = scheduler.current.getLatencyCompensation();
+        const newLatency = currentLatency + 10;
+        scheduler.current.setLatencyCompensation(newLatency);
+        setSchedulerStatus(prev => ({ ...prev, latencyMs: newLatency }));
+      }
+    }
+    // Reset latency
+    if (input === '0') {
+      if (scheduler.current) {
+        scheduler.current.setLatencyCompensation(0);
+        setSchedulerStatus(prev => ({ ...prev, latencyMs: 0 }));
+      }
+    }
   });
 
   // Initialize services
@@ -216,6 +259,9 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
 
     // Initialize scheduler
     scheduler.current = new MidiScheduler(midiService.current, link);
+    
+    // Set initial latency compensation
+    scheduler.current.setLatencyCompensation(initialLatency);
 
     // Initialize conductor
     if (apiKey) {
@@ -258,7 +304,7 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
     return () => {
       cleanup();
     };
-  }, []);
+  }, [initialLatency]);
 
   // Handle custom prompt submission
   const handleCustomPromptSubmit = (value) => {
@@ -423,9 +469,11 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
     if (scheduler.current) {
       const stats = scheduler.current.getStats();
       const playbackSpeed = scheduler.current.getPlaybackSpeed();
+      const latencyMs = scheduler.current.getLatencyCompensation();
       setSchedulerStatus({
         ...stats,
-        playbackSpeed
+        playbackSpeed,
+        latencyMs
       });
     }
 
@@ -543,6 +591,14 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
             </Text>
             <Text dimColor> (MIDI tempo)</Text>
           </Box>
+          
+          <Box>
+            <Text color="blue">Latency: </Text>
+            <Text color={schedulerStatus.latencyMs === 0 ? 'blueBright' : 'yellowBright'}>
+              {schedulerStatus.latencyMs > 0 ? '+' : ''}{schedulerStatus.latencyMs}ms
+            </Text>
+            <Text dimColor> {schedulerStatus.latencyMs < 0 ? '(notes play earlier)' : schedulerStatus.latencyMs > 0 ? '(notes play later)' : '(no compensation)'}</Text>
+          </Box>
         </Box>
 
         <Newline />
@@ -610,6 +666,9 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model }) => {
             <Text key="backslash">\         - Reset speed to 1.0x</Text>
             <Text key="slash">/         - Toggle half speed (0.5x)</Text>
             <Text key="star">*         - Toggle double speed (2.0x)</Text>
+            <Text key="bracket">[/]       - Adjust latency (±1ms)</Text>
+            <Text key="shift-bracket">Shift+[/] - Adjust latency (±10ms)</Text>
+            <Text key="zero">0         - Reset latency to 0ms</Text>
             <Text key="h">H         - Toggle help</Text>
             <Text key="q">Q         - Quit</Text>
             <Newline />

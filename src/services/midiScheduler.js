@@ -576,6 +576,14 @@ export class MidiScheduler extends EventEmitter {
   }
 
   /**
+   * Get current latency compensation
+   * @returns {number} Current latency compensation in ms
+   */
+  getLatencyCompensation() {
+    return this.latencyCompensation;
+  }
+
+  /**
    * Set playback speed
    * @param {number} speed - Playback speed multiplier (0.1 to 4.0, where 1.0 is normal)
    */
