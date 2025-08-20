@@ -81,6 +81,7 @@ export class MidiScheduler extends EventEmitter {
     this.lastScheduledBeat = -1;
     this.loopLength = 0; // 0 = no loop, > 0 = loop length in beats
     this.loopStart = 0;   // Loop start beat
+    this.debugNoteOffs = false; // Enable debug logging for NoteOff events
     
     // Scheduling
     this.scheduleTimer = null;
@@ -141,6 +142,10 @@ export class MidiScheduler extends EventEmitter {
    * Clear all scheduled events
    */
   clear() {
+    // Stop all pending setTimeout calls by marking events as cancelled
+    this.events.forEach(e => {
+      e.cancelled = true;
+    });
     this.events = [];
     this.stopAllNotes();
     this.lastScheduledBeat = -1;
@@ -212,13 +217,18 @@ export class MidiScheduler extends EventEmitter {
     const offBeatInBar = offBeat % quantum;
     
     // Schedule note off
-    this.addEvent({
+    const noteOffEvent = this.addEvent({
       type: EventType.NOTE_OFF,
       beat: offBeatInBar,
       bar: offBar,
       note,
       channel
     });
+    
+    // Debug logging for NoteOff tracking
+    if (this.debugNoteOffs) {
+      console.log(`🎹 Scheduled NoteOff: note=${note}, channel=${channel}, at bar=${offBar}:${offBeatInBar.toFixed(2)}`);
+    }
     
     return noteOn;
   }
@@ -371,8 +381,15 @@ export class MidiScheduler extends EventEmitter {
         const lastLoopPosition = scaledLastBeat % this.loopLength;
         
         // Reset all events when we loop back
+        // Only reset if they've actually been executed (not just scheduled)
         if (loopPosition < lastLoopPosition) {
-          this.events.forEach(e => e.executed = false);
+          this.events.forEach(e => {
+            // Only reset if actually executed, not just scheduled
+            if (e.executed) {
+              e.executed = false;
+              e.scheduledTime = null;
+            }
+          });
         }
         
         // Calculate when this event should next occur
@@ -387,32 +404,39 @@ export class MidiScheduler extends EventEmitter {
         }
       } else {
         // Non-looping: events are scheduled at absolute beat positions
-        // For conductor mode, we want events to maintain their relative timing
-        // but play back at the adjusted speed
-        targetBeat = eventBeat;
+        // Apply virtual beat offset for playback speed adjustment
+        targetBeat = eventBeat + this.virtualBeatOffset;
       }
       
       // Calculate timing
       const beatsUntilEvent = targetBeat - currentBeat;
       
-      // Only schedule if the event is coming up soon and hasn't been executed
-      if (beatsUntilEvent >= 0 && beatsUntilEvent * msPerBeat <= this.lookaheadTime && !event.executed) {
+      // Only schedule if the event is coming up soon and hasn't been scheduled
+      // Check scheduledTime instead of executed to prevent double-scheduling
+      const isScheduledForFuture = event.scheduledTime && event.scheduledTime > now;
+      
+      if (beatsUntilEvent >= 0 && beatsUntilEvent * msPerBeat <= this.lookaheadTime && !isScheduledForFuture) {
         const msUntilEvent = beatsUntilEvent * msPerBeat;
         const delay = Math.max(0, msUntilEvent + this.latencyCompensation);
         
+        // Mark with scheduled time BEFORE setTimeout to prevent race conditions
+        event.scheduledTime = now + delay;
+        
         setTimeout(() => {
-          this.executeEvent(event);
+          // Double-check the event should still be executed
+          if (this.isRunning) {
+            this.executeEvent(event);
+            event.executed = true;  // Mark as executed AFTER actual execution
+          }
           
-          // In loop mode, reset executed flag after execution
+          // In loop mode, clear scheduling info after execution
           if (this.loopLength > 0) {
             setTimeout(() => {
               event.executed = false;
+              event.scheduledTime = null;
             }, 100);
           }
         }, delay);
-        
-        event.executed = true;
-        event.scheduledTime = now + delay;
       }
     });
     
@@ -424,6 +448,11 @@ export class MidiScheduler extends EventEmitter {
    * @param {MidiEvent} event - Event to execute
    */
   executeEvent(event) {
+    // Skip if event was cancelled (e.g., by clear())
+    if (event.cancelled) {
+      return;
+    }
+    
     if (!this.midiService) {
       console.warn('No MIDI service available');
       return;
@@ -444,6 +473,11 @@ export class MidiScheduler extends EventEmitter {
       case EventType.NOTE_OFF:
         this.midiService.sendNoteOff(event.note, event.channel);
         this.activeNotes.delete(`${event.channel}-${event.note}`);
+        
+        // Debug logging for NoteOff execution
+        if (this.debugNoteOffs) {
+          console.log(`🔕 Executed NoteOff: note=${event.note}, channel=${event.channel}`);
+        }
         break;
         
       case EventType.CC:
