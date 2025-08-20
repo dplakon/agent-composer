@@ -36,13 +36,14 @@ const scheduler = new MidiScheduler(midi, link);
 
 // Track timing accuracy
 const timingData = [];
-let expectedTime = null;
 
+// Measure true timing error as (actual - planned) where planned is the scheduler's compensated timestamp
 scheduler.on('eventExecuted', (event) => {
   if (event.type === 'noteOn') {
     const actualTime = Date.now();
-    if (expectedTime) {
-      const offset = actualTime - expectedTime;
+    const planned = typeof event.scheduledTime === 'number' ? event.scheduledTime : null;
+    if (planned !== null) {
+      const offset = actualTime - planned; // >0 = late, <0 = early
       timingData.push({
         latency: scheduler.getLatencyCompensation(),
         offset: offset,
@@ -94,21 +95,26 @@ link.startUpdate(60, () => {});
 const runNextTest = () => {
   if (currentTest >= testLatencies.length) {
     console.log('\n📊 Test Results Summary:');
-    console.log('Latency (ms) | Avg Offset (ms) | Notes');
-    console.log('-------------|-----------------|-------');
+    console.log('Latency (ms) | Avg Offset (ms) | Median (ms) | StdDev (ms) | Samples');
+    console.log('-------------|-----------------|-------------|-------------|---------');
     
     const summary = {};
     timingData.forEach(data => {
       if (!summary[data.latency]) {
-        summary[data.latency] = { total: 0, count: 0 };
+        summary[data.latency] = [];
       }
-      summary[data.latency].total += data.offset;
-      summary[data.latency].count++;
+      summary[data.latency].push(data.offset);
     });
     
+    const fmt = (n) => (Number.isFinite(n) ? n.toFixed(1).padStart(11) : '     n/a   ');
     Object.keys(summary).sort((a, b) => Number(a) - Number(b)).forEach(latency => {
-      const avg = summary[latency].total / summary[latency].count;
-      console.log(`${String(latency).padStart(12)} | ${avg.toFixed(1).padStart(15)} | ${summary[latency].count}`);
+      const arr = summary[latency].slice().sort((x, y) => x - y);
+      const count = arr.length;
+      const avg = arr.reduce((s, v) => s + v, 0) / count;
+      const median = arr[Math.floor(count / 2)];
+      const variance = arr.reduce((s, v) => s + Math.pow(v - avg, 2), 0) / count;
+      const std = Math.sqrt(variance);
+      console.log(`${String(latency).padStart(12)} | ${fmt(avg)} | ${fmt(median)} | ${fmt(std)} | ${String(count).padStart(7)}`);
     });
     
     cleanup();
@@ -124,13 +130,6 @@ const runNextTest = () => {
   if (!scheduler.isRunning) {
     scheduler.start();
   }
-  
-  // Calculate expected time for first note based on current beat
-  const currentBeat = link.beat || 0;
-  const nextBeat = Math.ceil(currentBeat);
-  const beatsUntil = nextBeat - currentBeat;
-  const msPerBeat = 60000 / link.bpm;
-  expectedTime = Date.now() + (beatsUntil * msPerBeat) + latency;
   
   currentTest++;
   
