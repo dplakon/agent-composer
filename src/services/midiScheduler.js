@@ -72,6 +72,9 @@ export class MidiScheduler extends EventEmitter {
     // Timing
     this.lookaheadTime = 200;  // ms to look ahead (increased for high latency compensation)
     this.scheduleInterval = 10; // ms between schedule checks (tighter timing)
+    
+    // Internal: used to manage schedule timer recadencing
+    this._desiredScheduleInterval = this.scheduleInterval;
     this.latencyCompensation = 0; // ms (range: -500 to 500)
     this.playbackSpeed = 1.0; // Playback speed multiplier (1.0 = normal speed)
     
@@ -106,9 +109,7 @@ export class MidiScheduler extends EventEmitter {
     this.lastScheduledBeat = -1;
     
     // Start the scheduling loop
-    this.scheduleTimer = setInterval(() => {
-      this.scheduleEvents();
-    }, this.scheduleInterval);
+    this._startScheduleTimer();
     
     // Start Link update if not already running
     if (!this.updateTimer) {
@@ -131,6 +132,7 @@ export class MidiScheduler extends EventEmitter {
       clearInterval(this.scheduleTimer);
       this.scheduleTimer = null;
     }
+    this._desiredScheduleInterval = this.scheduleInterval;
     
     // Stop all active notes
     this.stopAllNotes();
@@ -415,9 +417,12 @@ export class MidiScheduler extends EventEmitter {
       // Check scheduledTime instead of executed to prevent double-scheduling
       const isScheduledForFuture = event.scheduledTime && event.scheduledTime > now;
       
-      // Extend lookahead window when using negative latency compensation
-      // This ensures we can schedule events early enough
-      const effectiveLookahead = this.lookaheadTime + Math.abs(Math.min(0, this.latencyCompensation));
+      // Extend lookahead window when using negative latency compensation, plus a safety margin
+      // Safety margin scales with the magnitude of negative latency (20% of |latency|),
+      // bounded between 20ms and 100ms to account for OS/loop jitter.
+      const negLatency = Math.max(0, -this.latencyCompensation);
+      const safetyMargin = Math.max(20, Math.min(100, Math.round(negLatency * 0.2)));
+      const effectiveLookahead = this.lookaheadTime + negLatency + safetyMargin;
       
       if (beatsUntilEvent >= 0 && beatsUntilEvent * msPerBeat <= effectiveLookahead && !isScheduledForFuture) {
         const msUntilEvent = beatsUntilEvent * msPerBeat;
@@ -638,6 +643,9 @@ export class MidiScheduler extends EventEmitter {
     // Increased range from ±100ms to ±500ms for systems with higher latency
     this.latencyCompensation = Math.max(-500, Math.min(500, ms));
     
+    // Adjust polling cadence based on absolute latency to reduce detection jitter.
+    this._updateCadenceForLatency();
+    
     // Debug logging when latency is set
     if (Math.abs(ms) > 100) {
       console.log(`⚡ High latency compensation set: ${ms}ms`);
@@ -767,6 +775,33 @@ export class MidiScheduler extends EventEmitter {
     }
     this.clear();
     this.removeAllListeners();
+  }
+
+  // Internal: start schedule timer using current desired interval
+  _startScheduleTimer() {
+    if (this.scheduleTimer) {
+      clearInterval(this.scheduleTimer);
+    }
+    this.scheduleTimer = setInterval(() => {
+      this.scheduleEvents();
+    }, this.scheduleInterval);
+  }
+
+  // Internal: compute and apply schedule interval based on latency
+  _updateCadenceForLatency() {
+    const absLat = Math.abs(this.latencyCompensation);
+    // Tighter cadence for larger magnitudes; clamp to reasonable values
+    let desired = 10; // default
+    if (absLat >= 300) desired = 5;
+    else if (absLat >= 150) desired = 8;
+    else desired = 10;
+
+    if (desired !== this.scheduleInterval) {
+      this.scheduleInterval = desired;
+      if (this.isRunning) {
+        this._startScheduleTimer();
+      }
+    }
   }
 }
 
