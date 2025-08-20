@@ -71,7 +71,7 @@ export class MidiScheduler extends EventEmitter {
     
     // Timing
     this.lookaheadTime = 200;  // ms to look ahead (increased for high latency compensation)
-    this.scheduleInterval = 25; // ms between schedule checks
+    this.scheduleInterval = 10; // ms between schedule checks (tighter timing)
     this.latencyCompensation = 0; // ms (range: -500 to 500)
     this.playbackSpeed = 1.0; // Playback speed multiplier (1.0 = normal speed)
     
