@@ -8,7 +8,9 @@ class MidiService {
     this.lastNoteOn = null;
     this.noteVelocity = 100;
     this.noteChannel = 0; // MIDI channel 1 (0-indexed)
-    this.latencyCompensation = 0; // in milliseconds (negative = earlier, positive = later)
+    // NOTE: Latency compensation is handled exclusively by the scheduler.
+    // This class no longer applies any additional delay/advance to messages.
+    this.latencyCompensation = 0; // kept for API compatibility; not used in timing
     
     // MIDI note numbers
     this.notes = {
@@ -101,26 +103,11 @@ class MidiService {
   sendNote(note = this.currentNote, duration = 100, velocity = this.noteVelocity) {
     if (!this.isConnected) return false;
 
-    // Apply latency compensation
-    // Negative values send the note earlier (compensate for delays)
-    // Positive values send the note later
-    const compensatedDelay = Math.max(0, this.latencyCompensation);
-    
-    if (compensatedDelay > 0) {
-      // Delay the note if compensation is positive
-      setTimeout(() => {
-        this.sendNoteOn(note, velocity);
-        setTimeout(() => {
-          this.sendNoteOff(note);
-        }, duration);
-      }, compensatedDelay);
-    } else {
-      // Send immediately (or handle negative compensation in the component)
-      this.sendNoteOn(note, velocity);
-      setTimeout(() => {
-        this.sendNoteOff(note);
-      }, duration);
-    }
+    // No latency compensation here; scheduler is the single source of timing truth.
+    this.sendNoteOn(note, velocity);
+    setTimeout(() => {
+      this.sendNoteOff(note);
+    }, duration);
 
     return true;
   }
@@ -135,7 +122,8 @@ class MidiService {
   sendScheduledNote(note = this.currentNote, duration = 100, velocity = this.noteVelocity, delay = 0) {
     if (!this.isConnected) return false;
 
-    const actualDelay = Math.max(0, delay + this.latencyCompensation);
+    // Respect only the provided delay; do not add internal compensation.
+    const actualDelay = Math.max(0, delay);
     
     if (actualDelay > 0) {
       setTimeout(() => {
@@ -263,8 +251,9 @@ class MidiService {
    * @param {number} ms - Latency compensation (-100 to 100ms)
    */
   setLatencyCompensation(ms) {
-    // Clamp between -100 and 100ms
-    this.latencyCompensation = Math.max(-100, Math.min(100, ms));
+    // Deprecated: latency compensation is handled by the scheduler.
+    // Preserve the value for UI/compatibility, but do not use it for timing.
+    this.latencyCompensation = ms;
   }
 
   /**
