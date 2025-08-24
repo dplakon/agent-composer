@@ -22,6 +22,7 @@
     "scheduler-pattern": "node --loader @esbuild-kit/esm-loader src/cli.jsx --scheduler --pattern patterns/example-pattern.json",
     "conductor": "node --loader @esbuild-kit/esm-loader src/cli.jsx --conductor",
     "conductor-anthropic": "node --loader @esbuild-kit/esm-loader src/cli.jsx --conductor --provider anthropic",
+    "style-viewer": "node --loader @esbuild-kit/esm-loader tools/style-viewer/index.jsx",
     "test": "node test-cli.js"
   },
   "keywords": [

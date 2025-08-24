@@ -7,6 +7,41 @@ import chalk from 'chalk';
 import MidiService from '../services/midiService.js';
 import MidiScheduler from '../services/midiScheduler.js';
 import Conductor from '../services/conductor.js';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+
+// Shared style state file path
+const STYLE_FILE = process.env.NB_STYLE_FILE || path.join(os.homedir(), '.neural-baliset', 'style.json');
+
+function ensureStyleDir() {
+  try {
+    fs.mkdirSync(path.dirname(STYLE_FILE), { recursive: true });
+  } catch (_) {}
+}
+
+function writeStyleStateAtomic(payload) {
+  try {
+    ensureStyleDir();
+    const tmp = STYLE_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(payload));
+    fs.renameSync(tmp, STYLE_FILE);
+  } catch (_) {}
+}
+
+let publishTimer = null;
+function publishStyleDebounced(styleText, isCustom, editing) {
+  if (publishTimer) clearTimeout(publishTimer);
+  publishTimer = setTimeout(() => {
+    writeStyleStateAtomic({
+      style: styleText,
+      isCustom: !!isCustom,
+      editing: !!editing,
+      source: 'Neural Baliset',
+      ts: Date.now()
+    });
+  }, 33);
+}
 
 const ConductorComponent = ({ link, apiKey, provider = 'openai', model, initialLatency = 0 }) => {
   const [conductorStatus, setConductorStatus] = useState({
@@ -136,21 +171,32 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model, initialL
       }
     }
 
-    // Change style - now opens text input
-    if (input === 's') {
+  // Change style - now opens text input
+  if (input === 's') {
       setIsEditingStyle(true);
       setCustomPrompt(isUsingCustomStyle ? customPrompt : '');
+      const currentText = isUsingCustomStyle ? customPrompt : style;
+      publishStyleDebounced(currentText, isUsingCustomStyle, true);
     }
     
-    // Quick preset styles (number keys)
-    if (input >= '1' && input <= '6') {
+  // Quick preset styles (number keys)
+  if (input >= '1' && input <= '6') {
       const index = parseInt(input) - 1;
       if (index < styles.length) {
-        setStyle(styles[index]);
+        const chosen = styles[index];
+        setStyle(chosen);
         setIsUsingCustomStyle(false);
         if (conductor.current) {
-          conductor.current.setSystemInjection(`Style: ${styles[index]}`);
+          conductor.current.setSystemInjection(`Style: ${chosen}`);
         }
+        // Publish preset selection immediately
+        writeStyleStateAtomic({
+          style: chosen,
+          isCustom: false,
+          editing: false,
+          source: 'Neural Baliset',
+          ts: Date.now()
+        });
       }
     }
 
@@ -306,6 +352,18 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model, initialL
     };
   }, [initialLatency]);
 
+  // Publish initial state on mount so the viewer has something to render
+  useEffect(() => {
+    writeStyleStateAtomic({
+      style: isUsingCustomStyle ? customPrompt : style,
+      isCustom: isUsingCustomStyle,
+      editing: false,
+      source: 'Neural Baliset',
+      ts: Date.now()
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Handle custom prompt submission
   const handleCustomPromptSubmit = (value) => {
     if (value.trim()) {
@@ -315,6 +373,14 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model, initialL
       if (conductor.current) {
         conductor.current.setSystemInjection(value);
       }
+      // Publish final (non-editing) state
+      writeStyleStateAtomic({
+        style: value,
+        isCustom: true,
+        editing: false,
+        source: 'Neural Baliset',
+        ts: Date.now()
+      });
       console.log(`💉 Custom style injection: ${value}`);
     }
     setIsEditingStyle(false);
@@ -636,7 +702,10 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model, initialL
           <Newline />
           <TextInput
             value={customPrompt}
-            onChange={setCustomPrompt}
+            onChange={(value) => {
+              setCustomPrompt(value);
+              publishStyleDebounced(value, true, true);
+            }}
             onSubmit={handleCustomPromptSubmit}
             placeholder="e.g., 'Dark ambient with glitchy drums and ethereal pads'"
           />
