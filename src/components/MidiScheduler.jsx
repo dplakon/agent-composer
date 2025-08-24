@@ -18,7 +18,7 @@ const MidiSchedulerComponent = ({ link, initialPattern = null, initialLatency = 
     pendingEvents: 0,
     loopEnabled: false,
     currentBeat: 0,
-    playbackSpeed: 1.0
+    playbackSpeed: 0.5
   });
 
   const [beatInfo, setBeatInfo] = useState({

@@ -22,7 +22,7 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model, initialL
     totalEvents: 0,
     eventsExecuted: 0,
     notesPlayed: 0,
-    playbackSpeed: 1.0,
+    playbackSpeed: 0.5,
     latencyMs: initialLatency
   });
 
@@ -35,7 +35,7 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model, initialL
   });
 
   const [showHelp, setShowHelp] = useState(false);
-  const [style, setStyle] = useState('Electronic');
+  const [style, setStyle] = useState('Minimalist, repetitive, consonant, whole notes only');
   const [autoGenerate, setAutoGenerate] = useState(false);
   const [isEditingStyle, setIsEditingStyle] = useState(false);
   const [customPrompt, setCustomPrompt] = useState('');
@@ -51,7 +51,7 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model, initialL
 
   // Style presets
   const styles = [
-    'Electronic',
+    'Minimalist, repetitive, consonant, whole notes only',
     'Classical',
     'Jazz',
     'Ambient',
@@ -532,7 +532,7 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model, initialL
   return (
     <Box flexDirection="column" padding={1}>
       <Gradient name="rainbow">
-        <BigText text="AI CONDUCTOR" font="chrome" />
+        <BigText text="Neural Baliset" font="chrome" />
       </Gradient>
 
       <Box borderStyle="round" borderColor="cyan" padding={1} flexDirection="column">

@@ -76,7 +76,7 @@ export class MidiScheduler extends EventEmitter {
     // Internal: used to manage schedule timer recadencing
     this._desiredScheduleInterval = this.scheduleInterval;
     this.latencyCompensation = 0; // ms (range: -500 to 500)
-    this.playbackSpeed = 1.0; // Playback speed multiplier (1.0 = normal speed)
+    this.playbackSpeed = 0.5; // Playback speed multiplier (default 0.5x)
     
     // State
     this.isRunning = false;
