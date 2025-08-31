@@ -196,6 +196,13 @@ const MidiSchedulerComponent = ({ link, initialPattern = null, initialLatency = 
         updateSchedulerStatus();
       }
     }
+    // Quick set quarter speed (0.25x)
+    if (input === '.') {
+      if (scheduler.current) {
+        scheduler.current.setPlaybackSpeed(0.25);
+        updateSchedulerStatus();
+      }
+    }
   });
 
   // Load preset patterns
@@ -512,9 +519,10 @@ const MidiSchedulerComponent = ({ link, initialPattern = null, initialLatency = 
             <Text>Shift+[/] - Adjust latency (±10ms)</Text>
             <Text>0         - Reset latency to 0ms</Text>
             <Text>+/-       - Adjust playback speed</Text>
-            <Text>\         - Reset speed to 1.0x</Text>
+            <Text>\\         - Reset speed to 1.0x</Text>
             <Text>/         - Toggle half speed (0.5x)</Text>
             <Text>*         - Toggle double speed (2.0x)</Text>
+            <Text>.         - Set speed to quarter (0.25x)</Text>
             <Text>H         - Toggle help</Text>
             <Text>Q         - Quit</Text>
           </Box>

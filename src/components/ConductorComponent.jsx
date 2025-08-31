@@ -249,6 +249,13 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model, initialL
         updateStatus();
       }
     }
+    // Quick set quarter speed (0.25x)
+    if (input === '.') {
+      if (scheduler.current) {
+        scheduler.current.setPlaybackSpeed(0.25);
+        updateStatus();
+      }
+    }
 
     // Latency compensation controls
     if (input === '[' && !key.shift) {
@@ -732,9 +739,10 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model, initialL
             <Text key="l">L         - Toggle loop mode</Text>
             <Text key="c">C         - Clear and reset</Text>
             <Text key="plus">+/-       - Adjust playback speed</Text>
-            <Text key="backslash">\         - Reset speed to 1.0x</Text>
+            <Text key="backslash">\\         - Reset speed to 1.0x</Text>
             <Text key="slash">/         - Toggle half speed (0.5x)</Text>
             <Text key="star">*         - Toggle double speed (2.0x)</Text>
+            <Text key="dot">.         - Set speed to quarter (0.25x)</Text>
             <Text key="bracket">[/]       - Adjust latency (±1ms)</Text>
             <Text key="shift-bracket">Shift+[/] - Adjust latency (±10ms)</Text>
             <Text key="zero">0         - Reset latency to 0ms</Text>

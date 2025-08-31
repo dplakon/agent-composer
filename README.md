@@ -12,8 +12,10 @@ A beautiful command-line interface for monitoring Ableton Link beat information 
 - ▶️ Play state synchronization
 - 🎹 **Virtual MIDI output** - Send MIDI notes synchronized to Link beats
 - 🎛️ MIDI clock output for tempo sync
-- 🤖 **AI Conductor** - LLM-powered music generation synchronized with Link
+- 🤖 **AI Conductor** ("Neural Baliset") - LLM-powered music generation synchronized with Link
 - 🎼 **MIDI Scheduler** - Advanced pattern sequencing with beat-perfect timing
+- 🕒 Playback speed control independent of Link tempo (0.1x to 4.0x)
+- 📝 Real-time style publishing + external viewer CLI (large-format display)
 
 ## Prerequisites
 
@@ -53,33 +55,27 @@ ableton-link-cli
 ## Usage
 
 ```bash
-# If running directly without global install, use:
-./cli.cjs [options]
-# OR use npm scripts:
-npm run conductor
+# Development / local usage
+npm start                         # Basic Link monitor
+npm run midi                      # Link monitor + MIDI output on beats
+npm run scheduler                 # MIDI scheduler mode
+npm run scheduler-pattern         # Scheduler with example pattern loaded
+npm run conductor                 # AI Conductor (OpenAI)
+npm run conductor-anthropic       # AI Conductor (Anthropic)
+npm run dev                       # Hot-reload dev mode
 
-# After global install:
-ableton-link-cli
+# After global install
+ableton-link-cli                  # Same as npm start
+ableton-link-cli --midi           # Enable MIDI output
+ableton-link-cli --scheduler      # Scheduler mode
+ableton-link-cli --conductor      # Conductor mode
 
-# Enable MIDI output (sends C4 notes on every beat)
-ableton-link-cli --midi
+# Common flags
+ableton-link-cli --bpm 128 --quantum 8
+ableton-link-cli -b 140 -q 4
+ableton-link-cli --latency -15    # MIDI latency compensation (ms)
 
-# Run the MIDI scheduler with patterns
-ableton-link-cli --scheduler
-
-# Run the AI Conductor (requires API key)
-ableton-link-cli --conductor
-
-# Set custom BPM
-ableton-link-cli --bpm 128
-
-# Set custom quantum (bar length)
-ableton-link-cli --quantum 8
-
-# Combine options
-ableton-link-cli -b 140 -q 4 --midi
-
-# Show help
+# Help
 ableton-link-cli --help
 ```
 
@@ -185,9 +181,10 @@ The AI Conductor uses LLM (Large Language Model) technology to generate musical 
 - **L** - Toggle loop mode
 - **C** - Clear all events
 - **+/-** - Adjust playback speed (0.1x to 4.0x)
-- **\** - Reset speed to 1.0x
+- **\\** - Reset speed to 1.0x
 - **/** - Toggle half speed (0.5x)
 - **\*** - Toggle double speed (2.0x)
+- **.** - Set quarter speed (0.25x)
 - **H** - Show help
 - **Q** - Quit
 
@@ -223,11 +220,27 @@ npm run scheduler -- --pattern patterns/example-pattern.json
 - **E** - Export current pattern
 - **[/]** - Adjust latency compensation
 - **+/-** - Adjust playback speed (0.1x to 4.0x)
-- **\** - Reset speed to 1.0x
+- **\\** - Reset speed to 1.0x
 - **/** - Toggle half speed (0.5x)
 - **\*** - Toggle double speed (2.0x)
+- **.** - Set quarter speed (0.25x)
 - **H** - Show help
 - **Q** - Quit
+
+## Style Viewer (Large-format external display)
+
+The project includes a separate Ink-based viewer that renders the current style prompt in very large type for performances and installations.
+
+- Run the viewer in another terminal:
+  ```bash
+  npm run style-viewer
+  ```
+- By default, it reads from: `~/.neural-baliset/style.json`
+- Override the path for both apps with:
+  ```bash
+  export NB_STYLE_FILE=/tmp/neural-baliset-style.json
+  ```
+- The main app publishes the style in real time as you type in the Conductor view (press S). The viewer updates instantly.
 
 ## Latency Compensation
 
@@ -299,6 +312,8 @@ npm test
 
 ```
 ableton-link-cli/
+├── bin/
+│   └── cli                           # Executable entry point
 ├── src/
 │   ├── cli.jsx                       # Main CLI entry point
 │   ├── components/
@@ -306,17 +321,18 @@ ableton-link-cli/
 │   │   ├── LinkDisplayWithControls.jsx # Component with keyboard controls
 │   │   ├── LinkDisplayWithMidi.jsx   # Component with MIDI output
 │   │   ├── MidiScheduler.jsx         # MIDI scheduler component
-│   │   └── ConductorComponent.jsx    # AI conductor interface
+│   │   └── ConductorComponent.jsx    # AI conductor interface ("Neural Baliset")
 │   └── services/
 │       ├── midiService.js            # MIDI port and message handling
-│       ├── MidiScheduler.js          # Pattern scheduling engine
-│       └── Conductor.js              # LLM integration for music generation
+│       ├── midiScheduler.js          # Pattern scheduling engine
+│       └── conductor.js              # LLM integration for music generation
+├── tools/
+│   └── style-viewer/
+│       └── index.jsx                 # Large-format style viewer (Ink)
 ├── docs/
 │   └── CONDUCTOR.md                  # AI Conductor documentation
-├── patterns/                          # Example pattern files
+├── patterns/
 │   └── example-pattern.json
-├── test-midi.js                      # MIDI functionality test
-├── test-conductor.js                 # Conductor service test
 ├── demo.js                           # Demo Link peer
 ├── package.json
 └── README.md
