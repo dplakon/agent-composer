@@ -1,6 +1,6 @@
-# Ableton Link CLI
+# Agent Composer
 
-A beautiful command-line interface for monitoring Ableton Link beat information in your terminal. This tool connects to any Link-enabled application on your network and displays real-time beat, phase, BPM, and synchronization data.
+A beautiful command-line interface for generating realtime music with AI.
 
 ## Features
 
