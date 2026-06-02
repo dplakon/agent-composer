@@ -320,7 +320,7 @@ const ConductorComponent = ({ link, apiKey, provider = 'openai', model, initialL
     if (apiKey) {
       conductor.current = new Conductor({
         provider,
-        model: model || (provider === 'openai' ? 'gpt-4-turbo-preview' : 'claude-3-opus-20240229'),
+        model: model || (provider === 'openai' ? 'gpt-4-turbo-preview' : 'claude-sonnet-4-6'),
         apiKey,
         temperature: 0.8
       });
